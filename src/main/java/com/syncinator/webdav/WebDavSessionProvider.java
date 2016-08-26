@@ -13,4 +13,3 @@ public class WebDavSessionProvider implements DavSessionProvider {
     public void releaseSession(WebdavRequest request) {
     }
 }
-}
