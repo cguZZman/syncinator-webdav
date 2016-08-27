@@ -1,7 +1,6 @@
 package com.syncinator.webdav.server;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.jackrabbit.server.io.IOUtil;
@@ -10,8 +9,6 @@ import org.apache.jackrabbit.webdav.DavCompliance;
 import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
-import org.apache.jackrabbit.webdav.DavResourceIterator;
-import org.apache.jackrabbit.webdav.DavResourceIteratorImpl;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
@@ -31,19 +28,16 @@ import org.apache.jackrabbit.webdav.property.DavPropertySet;
 import org.apache.jackrabbit.webdav.property.DefaultDavProperty;
 import org.apache.jackrabbit.webdav.property.PropEntry;
 import org.apache.jackrabbit.webdav.property.ResourceType;
-import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 
-public class SyncinatorDavResource implements DavResource {
+public abstract class SyncinatorDavResource implements DavResource {
 
-	private DavResourceFactory factory;
 	private DavResourceLocator locator;
-	private DavSession session;
 	private long modificationTime = IOUtil.UNDEFINED_TIME;
 	protected DavPropertySet properties = new DavPropertySet();
 	protected boolean propsInitialized = false;
-    private boolean isCollection = true;
-    private ResourceConfig config;
-    
+	protected String driveId;
+	protected String resourcePath;
+	
 	public static final String METHODS = DavResource.METHODS + ", " + BindConstants.METHODS;
     public static final String COMPLIANCE_CLASSES = DavCompliance.concatComplianceClasses(
         new String[] {
@@ -54,13 +48,26 @@ public class SyncinatorDavResource implements DavResource {
         }
     );
     
-	public SyncinatorDavResource(DavResourceLocator locator, DavSession session, DavResourceFactory factory) {
+	public SyncinatorDavResource(DavResourceLocator locator) {
 		this.locator = locator;
-		this.session = session;
-		this.factory = factory;
+		String path = locator.getResourcePath();
+		int ipos = locator.getWorkspacePath().length()+1;
+		if (path.length() > ipos){
+			int rpos = path.indexOf('/', ipos);
+			if (rpos == -1) {
+				driveId = path.substring(ipos);
+	        } else {
+	            driveId = path.substring(ipos, rpos);
+	            resourcePath = path.substring(rpos);
+	        }
+		}
 	}
 
+	protected abstract void fetch();
+	
 	protected void initProperties() {
+		fetch();
+		
         if (!exists() || propsInitialized) {
             return;
         }
@@ -121,11 +128,6 @@ public class SyncinatorDavResource implements DavResource {
 	}
 
 	@Override
-	public boolean isCollection() {
-		return locator.getResourcePath() == null || locator.getResourcePath().length() == 1;
-	}
-
-	@Override
 	public String getDisplayName() {
 		String resPath = getResourcePath();
         return (resPath != null) ? Text.getName(resPath) : resPath;
@@ -138,7 +140,7 @@ public class SyncinatorDavResource implements DavResource {
 
 	@Override
 	public String getResourcePath() {
-		return locator.getResourcePath();
+		return resourcePath;
 	}
 
 	@Override
@@ -201,18 +203,6 @@ public class SyncinatorDavResource implements DavResource {
 	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
 		// TODO Auto-generated method stub
 
-	}
-
-	@Override
-	public DavResourceIterator getMembers() {
-		ArrayList<DavResource> list = new ArrayList<DavResource>();
-		String path = locator.getResourcePath();
-		if (path == null) path = "";
-		String workspace = locator.getWorkspacePath();
-		if (workspace == null) workspace = "";
-		DavResourceLocator resourceLocator = locator.getFactory().createResourceLocator(locator.getPrefix(), workspace, path + "/ingon.doc");
-		list.add(new SyncinatorDavResource(resourceLocator, session, factory));
-		return new DavResourceIteratorImpl(list);
 	}
 
 	@Override
@@ -283,12 +273,16 @@ public class SyncinatorDavResource implements DavResource {
 
 	@Override
 	public DavResourceFactory getFactory() {
-		return factory;
+		return null;
 	}
 
 	@Override
 	public DavSession getSession() {
-		return session;
+		return null;
+	}
+	
+	public boolean isRoot(){
+		return resourcePath == null;
 	}
 
 }
