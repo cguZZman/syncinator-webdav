@@ -5,6 +5,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 
+import com.syncinator.webdav.server.SyncinatorSimpleWebdavServlet;
+
 @SpringBootApplication
 public class SyncinatorWebdavApplication {
 
@@ -14,6 +16,6 @@ public class SyncinatorWebdavApplication {
 	
 	@Bean
 	public ServletRegistrationBean servletRegistrationBean(){
-	    return new ServletRegistrationBean(new WebdavServlet(),"/onedrive/*");
+	    return new ServletRegistrationBean(new SyncinatorSimpleWebdavServlet(),"/*");
 	}
 }
