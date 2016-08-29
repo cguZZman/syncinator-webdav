@@ -1,9 +1,15 @@
 package com.syncinator.webdav.server;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Date;
 import java.util.List;
 
+import javax.jcr.RepositoryException;
+
+import org.apache.jackrabbit.server.io.AbstractExportContext;
 import org.apache.jackrabbit.server.io.IOUtil;
+import org.apache.jackrabbit.server.io.PropertyExportContext;
 import org.apache.jackrabbit.util.Text;
 import org.apache.jackrabbit.webdav.DavCompliance;
 import org.apache.jackrabbit.webdav.DavException;
@@ -28,15 +34,22 @@ import org.apache.jackrabbit.webdav.property.DavPropertySet;
 import org.apache.jackrabbit.webdav.property.DefaultDavProperty;
 import org.apache.jackrabbit.webdav.property.PropEntry;
 import org.apache.jackrabbit.webdav.property.ResourceType;
+import org.apache.jackrabbit.webdav.simple.ResourceConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class SyncinatorDavResource implements DavResource {
 
+	private static final Logger log = LoggerFactory.getLogger(SyncinatorDavResource.class);
+	
 	private DavResourceLocator locator;
-	private long modificationTime = IOUtil.UNDEFINED_TIME;
+	protected long modificationTime = IOUtil.UNDEFINED_TIME;
 	protected DavPropertySet properties = new DavPropertySet();
 	protected boolean propsInitialized = false;
 	protected String driveId;
 	protected String resourcePath;
+	
+	protected ResourceConfig config;
 	
 	public static final String METHODS = DavResource.METHODS + ", " + BindConstants.METHODS;
     public static final String COMPLIANCE_CLASSES = DavCompliance.concatComplianceClasses(
@@ -48,8 +61,9 @@ public abstract class SyncinatorDavResource implements DavResource {
         }
     );
     
-	public SyncinatorDavResource(DavResourceLocator locator) {
+	public SyncinatorDavResource(DavResourceLocator locator, ResourceConfig config) {
 		this.locator = locator;
+		this.config = config;
 		String path = locator.getResourcePath();
 		int ipos = locator.getWorkspacePath().length()+1;
 		if (path.length() > ipos){
@@ -72,13 +86,6 @@ public abstract class SyncinatorDavResource implements DavResource {
             return;
         }
 
-//        try {
-//            config.getPropertyManager().exportProperties(getPropertyExportContext(), isCollection());
-//        } catch (RepositoryException e) {
-//            log.warn("Error while accessing resource properties", e);
-//        }
-
-        // set (or reset) fundamental properties
         if (getDisplayName() != null) {
             properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, getDisplayName()));
         }
@@ -112,6 +119,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 
         propsInitialized = true;
     }
+	
 	@Override
 	public String getComplianceClass() {
 		return COMPLIANCE_CLASSES;
@@ -126,11 +134,11 @@ public abstract class SyncinatorDavResource implements DavResource {
 	public boolean exists() {
 		return true;
 	}
-
+	
 	@Override
 	public String getDisplayName() {
 		String resPath = getResourcePath();
-        return (resPath != null) ? Text.getName(resPath) : resPath;
+        return (resPath != null) ? Text.getName(resPath) : "carlos' onedrive";
 	}
 
 	@Override

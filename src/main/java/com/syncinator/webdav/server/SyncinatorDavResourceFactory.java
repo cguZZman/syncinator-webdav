@@ -7,6 +7,7 @@ import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.DavSession;
+import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,19 +17,25 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 
 	private static final Logger log = LoggerFactory.getLogger(SyncinatorDavResourceFactory.class);
 	
+	private ResourceConfig config;
+	
+	
+	public SyncinatorDavResourceFactory(ResourceConfig config) {
+		this.config = config;
+	}
+
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request,
 			DavServletResponse response) throws DavException {
+		log.info(">>> Requested: " + locator.getResourcePath() + ", " + request.getMethod() +", deep: " + request.getDepth() + ", dav session: " + request.getSession().getCreationTime());
 		return createResource(locator, null);
-		
 	}
 
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavSession session) throws DavException {
 		String workspace = locator.getWorkspaceName();
-		log.info(">>> Requested: " + locator.getResourcePath());
 		if (workspace.equals("onedrive")){
-			return new OneDriveDavResource(locator);	
+			return new OneDriveDavResource(locator, config);	
 		}
 		return null;
 	}
