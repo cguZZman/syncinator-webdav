@@ -1,21 +1,16 @@
 package com.syncinator.webdav.server;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Date;
 import java.util.List;
 
-import javax.jcr.RepositoryException;
-
-import org.apache.jackrabbit.server.io.AbstractExportContext;
 import org.apache.jackrabbit.server.io.IOUtil;
-import org.apache.jackrabbit.server.io.PropertyExportContext;
 import org.apache.jackrabbit.util.Text;
 import org.apache.jackrabbit.webdav.DavCompliance;
 import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
+import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
 import org.apache.jackrabbit.webdav.bind.BindConstants;
@@ -48,6 +43,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 	protected boolean propsInitialized = false;
 	protected String driveId;
 	protected String resourcePath;
+	protected DavServletRequest request;
 	
 	protected ResourceConfig config;
 	
@@ -61,9 +57,10 @@ public abstract class SyncinatorDavResource implements DavResource {
         }
     );
     
-	public SyncinatorDavResource(DavResourceLocator locator, ResourceConfig config) {
+	public SyncinatorDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request) {
 		this.locator = locator;
 		this.config = config;
+		this.request = request;
 		String path = locator.getResourcePath();
 		int ipos = locator.getWorkspacePath().length()+1;
 		if (path.length() > ipos){
@@ -80,11 +77,11 @@ public abstract class SyncinatorDavResource implements DavResource {
 	protected abstract void fetch();
 	
 	protected void initProperties() {
-		fetch();
-		
-        if (!exists() || propsInitialized) {
+		if (propsInitialized) {
             return;
         }
+		propsInitialized = true;
+		fetch();
 
         if (getDisplayName() != null) {
             properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, getDisplayName()));
@@ -117,7 +114,7 @@ public abstract class SyncinatorDavResource implements DavResource {
         supportedLock.addEntry(Type.WRITE, Scope.EXCLUSIVE);
         properties.add(supportedLock);
 
-        propsInitialized = true;
+        
     }
 	
 	@Override
@@ -130,11 +127,6 @@ public abstract class SyncinatorDavResource implements DavResource {
 		return METHODS;
 	}
 
-	@Override
-	public boolean exists() {
-		return true;
-	}
-	
 	@Override
 	public String getDisplayName() {
 		String resPath = getResourcePath();

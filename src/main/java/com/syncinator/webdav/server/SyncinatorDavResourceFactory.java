@@ -27,17 +27,24 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request,
 			DavServletResponse response) throws DavException {
-		log.info(">>> Requested: " + locator.getResourcePath() + ", " + request.getMethod() +", deep: " + request.getDepth() + ", dav session: " + request.getSession().getCreationTime());
-		return createResource(locator, null);
+		log.info(">>> Requested: " + locator.getResourcePath().trim()
+				+ " [" + ((int)locator.getResourcePath().charAt(locator.getResourcePath().length() - 1))
+				+ "] " + request.getMethod() + ", deep: " + request.getDepth()
+				+ ", empty props: " + request.getPropFindProperties().isEmpty());
+		request.getPropFindProperties().forEach(p -> System.out.println(p));
+		return createResource(locator, request);
 	}
 
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavSession session) throws DavException {
+		return createResource(locator, (DavServletRequest) null);
+	}
+	
+	private DavResource createResource(DavResourceLocator locator, DavServletRequest request) throws DavException {
 		String workspace = locator.getWorkspaceName();
 		if (workspace.equals("onedrive")){
-			return new OneDriveDavResource(locator, config);	
+			return new OneDriveDavResource(locator, config, request);	
 		}
 		return null;
 	}
-	
 }
