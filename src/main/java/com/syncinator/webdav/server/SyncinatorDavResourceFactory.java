@@ -28,21 +28,23 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
+		log.info(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
+		if (!request.getPropFindProperties().isEmpty()){
+			StringBuffer sb = new StringBuffer(">> Properties requested: ");
+			request.getPropFindProperties().forEach(p -> sb.append(p).append(" "));
+			log.info(sb.toString());
+		}
+		
 		String workspace = locator.getWorkspacePath();
 		if (workspace == null) {
 			throw new DavException(HttpServletResponse.SC_FORBIDDEN);
 		} else {
-			log.info(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
-			if (!request.getPropFindProperties().isEmpty()){
-				StringBuffer sb = new StringBuffer(">> Properties requested: ");
-				request.getPropFindProperties().forEach(p -> sb.append(p).append(" "));
-				log.info(sb.toString());
-			}
-			if (workspace.equals("onedrive")){
+			if (workspace.equals("/onedrive")){
 				return new OneDriveDavResource(locator, config, request, response);	
+			} else {
+				throw new DavException(HttpServletResponse.SC_NOT_FOUND);
 			}
 		}
-		return null;
 	}
 
 	@Override
