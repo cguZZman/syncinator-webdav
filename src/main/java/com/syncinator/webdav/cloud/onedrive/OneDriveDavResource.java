@@ -57,9 +57,13 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 					properties.add(new DefaultDavProperty<String>(DavPropertyName.GETLASTMODIFIED, IOUtil.getLastModified(modificationTime)));
 					properties.add(new DefaultDavProperty<String>(DavPropertyName.CREATIONDATE, IOUtil.getLastModified(item.getFileSystemInfo().getCreatedDateTime().getTime())));
 				}
+				String contentType = "application/octet-stream";
 				if (item.getFile() != null) {
-					properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTTYPE, item.getFile().getMimeType()));
+					contentType = item.getFile().getMimeType();
+				} else  if (item.getFolder() != null){
+					contentType = "text/directory";
 				}
+				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTTYPE, contentType));
 				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTLENGTH, item.getSize() + ""));
 				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETETAG, item.geteTag()));
 			}
