@@ -3,6 +3,8 @@ package com.syncinator.webdav.server;
 import java.io.IOException;
 import java.util.List;
 
+import javax.servlet.http.HttpServletResponse;
+
 import org.apache.jackrabbit.server.io.IOUtil;
 import org.apache.jackrabbit.util.Text;
 import org.apache.jackrabbit.webdav.DavCompliance;
@@ -11,6 +13,7 @@ import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
+import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
 import org.apache.jackrabbit.webdav.bind.BindConstants;
@@ -35,15 +38,22 @@ import org.slf4j.LoggerFactory;
 
 public abstract class SyncinatorDavResource implements DavResource {
 
-	private static final Logger log = LoggerFactory.getLogger(SyncinatorDavResource.class);
+	protected Logger log = LoggerFactory.getLogger(this.getClass());
+	
+
+	protected boolean propsInitialized = false;
+	protected DavPropertySet properties = new DavPropertySet();
+	protected long modificationTime = IOUtil.UNDEFINED_TIME;
+	protected long creationTime = IOUtil.UNDEFINED_TIME;
+	protected String contentType = "application/octet-stream";
+	protected long size;
+	protected String eTag;
 	
 	private DavResourceLocator locator;
-	protected long modificationTime = IOUtil.UNDEFINED_TIME;
-	protected DavPropertySet properties = new DavPropertySet();
-	protected boolean propsInitialized = false;
-	protected String driveId;
+	protected String localAccountId;
 	protected String resourcePath;
 	protected DavServletRequest request;
+	protected DavServletResponse response;
 	
 	protected ResourceConfig config;
 	
@@ -57,32 +67,42 @@ public abstract class SyncinatorDavResource implements DavResource {
         }
     );
     
-	public SyncinatorDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request) {
+	public SyncinatorDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
 		this.locator = locator;
 		this.config = config;
 		this.request = request;
+		this.response = response;
 		String path = locator.getResourcePath();
 		int ipos = locator.getWorkspacePath().length()+1;
 		if (path.length() > ipos){
 			int rpos = path.indexOf('/', ipos);
 			if (rpos == -1) {
-				driveId = path.substring(ipos);
+				localAccountId = path.substring(ipos);
 	        } else {
-	            driveId = path.substring(ipos, rpos);
+	        	localAccountId = path.substring(ipos, rpos);
 	            resourcePath = path.substring(rpos);
 	        }
+		}
+		if (localAccountId == null){
+			throw new DavException(HttpServletResponse.SC_FORBIDDEN);
 		}
 	}
 
 	protected abstract void fetch();
 	
 	protected void initProperties() {
-		if (propsInitialized) {
-            return;
-        }
+		if (propsInitialized) return;
 		propsInitialized = true;
 		fetch();
-
+		
+		properties.add(new DefaultDavProperty<String>(DavPropertyName.GETLASTMODIFIED, IOUtil.getLastModified(modificationTime)));
+		properties.add(new DefaultDavProperty<String>(DavPropertyName.CREATIONDATE, IOUtil.getLastModified(creationTime)));
+		properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTTYPE, contentType));
+		properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTLENGTH, size + ""));
+		if (eTag != null){
+			properties.add(new DefaultDavProperty<String>(DavPropertyName.GETETAG, eTag));
+		}
+		
         if (getDisplayName() != null) {
             properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, getDisplayName()));
         }
@@ -96,15 +116,6 @@ public abstract class SyncinatorDavResource implements DavResource {
             properties.add(new DefaultDavProperty<String>(DavPropertyName.ISCOLLECTION, "0"));
         }
 
-//        if (rfc4122Uri != null) {
-//            properties.add(new HrefProperty(BindConstants.RESOURCEID, rfc4122Uri, true));
-//        }
-//
-//        Set<ParentElement> parentElements = getParentElements();
-//        if (!parentElements.isEmpty()) {
-//            properties.add(new ParentSet(parentElements));
-//        }
-
         /* set current lock information. If no lock is set to this resource,
         an empty lock discovery will be returned in the response. */
         properties.add(new LockDiscovery(getLock(Type.WRITE, Scope.EXCLUSIVE)));
@@ -113,7 +124,15 @@ public abstract class SyncinatorDavResource implements DavResource {
         SupportedLock supportedLock = new SupportedLock();
         supportedLock.addEntry(Type.WRITE, Scope.EXCLUSIVE);
         properties.add(supportedLock);
-
+        
+//      if (rfc4122Uri != null) {
+//	      properties.add(new HrefProperty(BindConstants.RESOURCEID, rfc4122Uri, true));
+//	  }
+//	
+//	  Set<ParentElement> parentElements = getParentElements();
+//	  if (!parentElements.isEmpty()) {
+//	      properties.add(new ParentSet(parentElements));
+//	  }
         
     }
 	

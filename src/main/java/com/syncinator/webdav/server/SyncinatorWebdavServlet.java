@@ -3,6 +3,7 @@ package com.syncinator.webdav.server;
 import javax.jcr.Repository;
 
 import org.apache.jackrabbit.webdav.DavException;
+import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
 import org.apache.jackrabbit.webdav.DavSessionProvider;
 import org.apache.jackrabbit.webdav.WebdavRequest;
@@ -29,6 +30,10 @@ public class SyncinatorWebdavServlet extends SimpleWebdavServlet {
             resourceFactory = new SyncinatorDavResourceFactory(getResourceConfig());
         }
         return resourceFactory;
+    }
+	@Override
+    protected boolean isPreconditionValid(WebdavRequest request, DavResource resource) {
+        return request.matchesIfHeader(resource);
     }
 	
 	@Override

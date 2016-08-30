@@ -2,16 +2,17 @@ package com.syncinator.webdav.cloud.onedrive;
 
 import java.util.ArrayList;
 
-import org.apache.jackrabbit.server.io.IOUtil;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.jackrabbit.util.Text;
+import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceIterator;
 import org.apache.jackrabbit.webdav.DavResourceIteratorImpl;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
-import org.apache.jackrabbit.webdav.property.DavPropertyName;
-import org.apache.jackrabbit.webdav.property.DefaultDavProperty;
+import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
-import org.springframework.http.HttpMethod;
 
 import com.onedrive.api.OneDrive;
 import com.onedrive.api.request.ItemRequest;
@@ -26,57 +27,54 @@ public class OneDriveDavResource extends SyncinatorDavResource {
     private Item item;
 	private boolean retrieved;
     
-	public OneDriveDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request) {
-		this(locator, null, config, request);
+	public OneDriveDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
+		this(locator, null, config, request, response);
 	}
-	public OneDriveDavResource(DavResourceLocator locator, Item item, ResourceConfig config, DavServletRequest request) {
-		super(locator, config, request);
+	public OneDriveDavResource(DavResourceLocator locator, Item item, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
+		super(locator, config, request, response);
 		this.item = item;
-		if (driveId != null){
-			onedrive = OneDriveConnectionRepository.getConnection(driveId);
-			if (onedrive != null){
-				if (isRoot()) {
-					itemRequest = onedrive.drive().root();
-				} else {
-					itemRequest = onedrive.drive().root().itemByPath(resourcePath);
-				}
+		onedrive = OneDriveConnectionRepository.getConnection(localAccountId);
+		if (onedrive != null){
+			if (isRoot()) {
+				itemRequest = onedrive.drive().root();
+			} else {
+				itemRequest = onedrive.drive().root().itemByPath(Text.escapePath(resourcePath));
 			}
+		} else {
+			throw new DavException(HttpServletResponse.SC_NOT_FOUND);
 		}
 	}
+	
 	@Override
 	protected void fetch() {
 		if (!retrieved){
 			retrieved = true;
 			if (item == null) {
-				item = itemRequest.fetch();
+				try {
+					item = itemRequest.fetch();
+				} catch (Exception e){
+					log.error(e.getMessage());
+				}
 			}
 			if (item != null){
-				//properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTLANGUAGE, item.getFile().));
 				if (item.getFileSystemInfo() != null){
-					modificationTime = item.getFileSystemInfo().getLastModifiedDateTime().getTime();	
-					properties.add(new DefaultDavProperty<String>(DavPropertyName.GETLASTMODIFIED, IOUtil.getLastModified(modificationTime)));
-					properties.add(new DefaultDavProperty<String>(DavPropertyName.CREATIONDATE, IOUtil.getLastModified(item.getFileSystemInfo().getCreatedDateTime().getTime())));
+					modificationTime = item.getFileSystemInfo().getLastModifiedDateTime().getTime();
+					creationTime = item.getFileSystemInfo().getCreatedDateTime().getTime();
 				}
-				String contentType = "application/octet-stream";
 				if (item.getFile() != null) {
 					contentType = item.getFile().getMimeType();
 				} else  if (item.getFolder() != null){
 					contentType = "text/directory";
 				}
-				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTTYPE, contentType));
-				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTLENGTH, item.getSize() + ""));
-				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETETAG, item.geteTag()));
+				size = item.getSize();
+				eTag = item.geteTag();
 			}
 		}
 	}
 	
 	@Override
 	public boolean exists() {
-		if (onedrive == null){
-			return false;
-		}
-		if (request != null && !request.getMethod().equals(HttpMethod.OPTIONS.name()))
-			initProperties();
+		initProperties();
 		return item != null;
 	}
 	
@@ -93,8 +91,12 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 		ItemCollection collection = itemRequest.children().fetch();
 		if (collection != null && collection.getValue() != null){
 			for (Item item : collection.getValue()){
-				DavResourceLocator resourceLocator = getLocator().getFactory().createResourceLocator(getLocator().getPrefix(), workspace, path + "/" + item.getName());
-				list.add(new OneDriveDavResource(resourceLocator, item, config, request));	
+				try {
+					DavResourceLocator resourceLocator = getLocator().getFactory().createResourceLocator(getLocator().getPrefix(), workspace, path + "/" + item.getName());
+					list.add(new OneDriveDavResource(resourceLocator, item, config, request, response));
+				} catch (DavException e) {
+					e.printStackTrace();
+				}	
 			}
 		}
 		return new DavResourceIteratorImpl(list);
