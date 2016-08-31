@@ -81,6 +81,10 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	
 	@Override
 	public void spool(OutputContext outputContext) throws IOException {
+		if (isCollection()){
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+			return;
+		}
 		itemRequest.content().download(outputContext.getOutputStream());
 		log.info("Done.");
 	}
