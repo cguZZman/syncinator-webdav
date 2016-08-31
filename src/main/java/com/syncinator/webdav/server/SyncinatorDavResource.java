@@ -174,12 +174,6 @@ public abstract class SyncinatorDavResource implements DavResource {
 	}
 
 	@Override
-	public void spool(OutputContext outputContext) throws IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
 	public DavPropertyName[] getPropertyNames() {
 		return getProperties().getPropertyNames();
 	}

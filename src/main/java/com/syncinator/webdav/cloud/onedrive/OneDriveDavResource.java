@@ -1,10 +1,10 @@
 package com.syncinator.webdav.cloud.onedrive;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.jackrabbit.util.Text;
 import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceIterator;
@@ -12,6 +12,7 @@ import org.apache.jackrabbit.webdav.DavResourceIteratorImpl;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
+import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 
 import com.onedrive.api.OneDrive;
@@ -38,7 +39,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			if (isRoot()) {
 				itemRequest = onedrive.drive().root();
 			} else {
-				itemRequest = onedrive.drive().root().itemByPath(Text.escapePath(resourcePath));
+				itemRequest = onedrive.drive().root().itemByPath(resourcePath);
 			}
 		} else {
 			throw new DavException(HttpServletResponse.SC_NOT_FOUND);
@@ -79,6 +80,12 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	}
 	
 	@Override
+	public void spool(OutputContext outputContext) throws IOException {
+		itemRequest.content().download(outputContext.getOutputStream());
+		log.info("Done.");
+	}
+	
+	@Override
 	public boolean isCollection() {
 		return isRoot() || (item != null && item.getFolder() != null); 
 	}
@@ -88,7 +95,12 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 		ArrayList<DavResource> list = new ArrayList<DavResource>();
 		String path = getLocator().getResourcePath();
 		String workspace = getLocator().getWorkspacePath();
-		ItemCollection collection = itemRequest.children().fetch();
+		ItemCollection collection = null;
+		try {
+			collection = itemRequest.children().fetch();
+		} catch(Exception e){
+			log.error(e.getMessage());
+		}
 		if (collection != null && collection.getValue() != null){
 			for (Item item : collection.getValue()){
 				try {
