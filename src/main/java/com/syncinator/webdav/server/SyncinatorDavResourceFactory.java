@@ -3,6 +3,7 @@ package com.syncinator.webdav.server;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.jackrabbit.webdav.DavException;
+import org.apache.jackrabbit.webdav.DavMethods;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
@@ -10,9 +11,11 @@ import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
+import org.ehcache.Cache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.cloud.onedrive.OneDriveDavResource;
 
 public class SyncinatorDavResourceFactory implements DavResourceFactory {
@@ -21,14 +24,17 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 	
 	private ResourceConfig config;
 	
+	private Cache<String, SyncinatorDavResource> resourceCache;
 	
 	public SyncinatorDavResourceFactory(ResourceConfig config) {
 		this.config = config;
+		resourceCache = SyncinatorCacheManager.getResourceCache();
 	}
 
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
-		log.info(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
+		if (!request.getMethod().equals(DavMethods.METHOD_PROPFIND) && !request.getMethod().equals(DavMethods.METHOD_GET))
+			log.info(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
 //		if (!request.getPropFindProperties().isEmpty()){
 //			StringBuffer sb = new StringBuffer(">> Properties requested: ");
 //			request.getPropFindProperties().forEach(p -> sb.append(p).append(" "));
@@ -40,7 +46,13 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 			throw new DavException(HttpServletResponse.SC_FORBIDDEN);
 		} else {
 			if (workspace.equals("/onedrive")){
-				return new OneDriveDavResource(locator, config, request, response);	
+				SyncinatorDavResource resource = resourceCache.get(locator.getResourcePath());
+				if (resource == null){
+					resource = new OneDriveDavResource(locator, config, request, response);
+					resourceCache.putIfAbsent(locator.getResourcePath(), resource);
+				}
+				return resource; 
+				
 			} else {
 				throw new DavException(HttpServletResponse.SC_NOT_FOUND);
 			}

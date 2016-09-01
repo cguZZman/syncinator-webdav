@@ -14,11 +14,13 @@ import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
+import org.ehcache.Cache;
 
 import com.onedrive.api.OneDrive;
 import com.onedrive.api.request.ItemRequest;
 import com.onedrive.api.resource.Item;
 import com.onedrive.api.resource.support.ItemCollection;
+import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.server.SyncinatorDavResource;
 
 public class OneDriveDavResource extends SyncinatorDavResource {
@@ -27,6 +29,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	private ItemRequest itemRequest;
     private Item item;
 	private boolean retrieved;
+	private Cache<String, SyncinatorDavResource> resourceCache;
     
 	public OneDriveDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
 		this(locator, null, config, request, response);
@@ -44,6 +47,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 		} else {
 			throw new DavException(HttpServletResponse.SC_NOT_FOUND);
 		}
+		resourceCache = SyncinatorCacheManager.getResourceCache();
 	}
 	
 	@Override
@@ -85,8 +89,12 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 			return;
 		}
-		itemRequest.content().download(outputContext.getOutputStream());
-		log.info("Done.");
+		try {
+			itemRequest.content().download(outputContext.getOutputStream());
+			log.info("Done.");
+		} catch (Exception e){
+			log.error("Error downloading: " + e.getMessage());
+		}
 	}
 	
 	@Override
@@ -109,7 +117,9 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			for (Item item : collection.getValue()){
 				try {
 					DavResourceLocator resourceLocator = getLocator().getFactory().createResourceLocator(getLocator().getPrefix(), workspace, path + "/" + item.getName());
-					list.add(new OneDriveDavResource(resourceLocator, item, config, request, response));
+					OneDriveDavResource resource = new OneDriveDavResource(resourceLocator, item, config, request, response);
+					list.add(resource);
+					resourceCache.putIfAbsent(resourceLocator.getResourcePath(), resource);
 				} catch (DavException e) {
 					e.printStackTrace();
 				}	
