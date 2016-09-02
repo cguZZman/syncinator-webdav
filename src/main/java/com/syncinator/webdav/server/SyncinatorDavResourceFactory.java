@@ -1,5 +1,7 @@
 package com.syncinator.webdav.server;
 
+import java.util.Enumeration;
+
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.jackrabbit.webdav.DavException;
@@ -33,13 +35,14 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
-		if (!request.getMethod().equals(DavMethods.METHOD_PROPFIND) && !request.getMethod().equals(DavMethods.METHOD_GET))
+		if (!request.getMethod().equals(DavMethods.METHOD_PROPFIND) && !request.getMethod().equals(DavMethods.METHOD_GET)){
 			log.info(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
-//		if (!request.getPropFindProperties().isEmpty()){
-//			StringBuffer sb = new StringBuffer(">> Properties requested: ");
-//			request.getPropFindProperties().forEach(p -> sb.append(p).append(" "));
-//			log.info(sb.toString());
-//		}
+			Enumeration<String> names = request.getHeaderNames();
+			while (names.hasMoreElements()){
+				String name = names.nextElement();
+				log.info(">> "+ name + ": " + request.getHeader(name));
+			}
+		}
 		
 		String workspace = locator.getWorkspacePath();
 		if (workspace == null) {
@@ -51,6 +54,8 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 					resource = new OneDriveDavResource(locator, config, request, response);
 					resourceCache.putIfAbsent(locator.getResourcePath(), resource);
 				}
+				resource.request = request;
+				resource.response = response;
 				return resource; 
 				
 			} else {

@@ -1,5 +1,8 @@
 package com.syncinator.webdav.server;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.servlet.http.HttpServletResponse;
@@ -10,6 +13,8 @@ import org.apache.jackrabbit.webdav.DavCompliance;
 import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
+import org.apache.jackrabbit.webdav.DavResourceIterator;
+import org.apache.jackrabbit.webdav.DavResourceIteratorImpl;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
@@ -17,6 +22,7 @@ import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
 import org.apache.jackrabbit.webdav.bind.BindConstants;
 import org.apache.jackrabbit.webdav.io.InputContext;
+import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.lock.ActiveLock;
 import org.apache.jackrabbit.webdav.lock.LockDiscovery;
 import org.apache.jackrabbit.webdav.lock.LockInfo;
@@ -37,10 +43,12 @@ import org.slf4j.LoggerFactory;
 public abstract class SyncinatorDavResource implements DavResource {
 
 	protected Logger log = LoggerFactory.getLogger(this.getClass());
-	
 
-	protected boolean propsInitialized = false;
 	protected DavPropertySet properties = new DavPropertySet();
+	protected boolean propsInitialized = false;
+	protected List<DavResource> children = new ArrayList<DavResource>();
+	protected boolean childrenInitialized = false;
+	
 	protected long modificationTime = IOUtil.UNDEFINED_TIME;
 	protected long creationTime = IOUtil.UNDEFINED_TIME;
 	protected String contentType = "application/octet-stream";
@@ -86,54 +94,94 @@ public abstract class SyncinatorDavResource implements DavResource {
 		}
 	}
 
-	protected abstract void fetch();
-	
+	protected abstract void fetchResource() throws Exception;
+	protected abstract void fetchChildren() throws Exception;
+	protected abstract void download(OutputStream os) throws Exception;
+
+	@Override
+	public DavResourceIterator getMembers() {
+		if (!childrenInitialized) {
+			synchronized (children) {
+				if (!childrenInitialized) {
+					childrenInitialized = true;
+					try {
+						fetchChildren();
+					} catch(Exception e){
+						childrenInitialized = false;
+						log.error(e.getMessage());
+					}
+					
+				}
+			}
+		}
+		return new DavResourceIteratorImpl(children);
+	}
 	protected void initProperties() {
 		if (propsInitialized) return;
-		propsInitialized = true;
-		fetch();
-		
-		properties.add(new DefaultDavProperty<String>(DavPropertyName.GETLASTMODIFIED, IOUtil.getLastModified(modificationTime)));
-		properties.add(new DefaultDavProperty<String>(DavPropertyName.CREATIONDATE, IOUtil.getLastModified(creationTime)));
-		properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTTYPE, contentType));
-		properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTLENGTH, size + ""));
-		if (eTag != null){
-			properties.add(new DefaultDavProperty<String>(DavPropertyName.GETETAG, eTag));
+		synchronized (properties) {
+			if (propsInitialized) return;
+			propsInitialized = true;
+			try {
+				fetchResource();
+			} catch(Exception e){
+				propsInitialized = false;
+				log.error(e.getMessage() + " - [" + getResourcePath() + "]");
+				return;
+				//throw new DavException(HttpServletResponse.SC_BAD_GATEWAY, e.getMessage());
+				//response.sendError(HttpServletResponse.SC_BAD_GATEWAY);
+			}
+			
+			properties.add(new DefaultDavProperty<String>(DavPropertyName.GETLASTMODIFIED, IOUtil.getLastModified(modificationTime)));
+			properties.add(new DefaultDavProperty<String>(DavPropertyName.CREATIONDATE, IOUtil.getLastModified(creationTime)));
+			properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTTYPE, contentType));
+			properties.add(new DefaultDavProperty<String>(DavPropertyName.GETCONTENTLENGTH, size + ""));
+			if (eTag != null){
+				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETETAG, eTag));
+			}
+			
+	        if (getDisplayName() != null) {
+	            properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, getDisplayName()));
+	        }
+	        if (isCollection()) {
+	            properties.add(new ResourceType(ResourceType.COLLECTION));
+	            // Windows XP support
+	            properties.add(new DefaultDavProperty<String>(DavPropertyName.ISCOLLECTION, "1"));
+	        } else {
+	            properties.add(new ResourceType(ResourceType.DEFAULT_RESOURCE));
+	            // Windows XP support
+	            properties.add(new DefaultDavProperty<String>(DavPropertyName.ISCOLLECTION, "0"));
+	        }
+	
+	        /* set current lock information. If no lock is set to this resource,
+	        an empty lock discovery will be returned in the response. */
+	        properties.add(new LockDiscovery(getLock(Type.WRITE, Scope.EXCLUSIVE)));
+	
+	        /* lock support information: all locks are lockable. */
+	        SupportedLock supportedLock = new SupportedLock();
+	        supportedLock.addEntry(Type.WRITE, Scope.EXCLUSIVE);
+	        properties.add(supportedLock);
 		}
-		
-        if (getDisplayName() != null) {
-            properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, getDisplayName()));
-        }
-        if (isCollection()) {
-            properties.add(new ResourceType(ResourceType.COLLECTION));
-            // Windows XP support
-            properties.add(new DefaultDavProperty<String>(DavPropertyName.ISCOLLECTION, "1"));
-        } else {
-            properties.add(new ResourceType(ResourceType.DEFAULT_RESOURCE));
-            // Windows XP support
-            properties.add(new DefaultDavProperty<String>(DavPropertyName.ISCOLLECTION, "0"));
-        }
-
-        /* set current lock information. If no lock is set to this resource,
-        an empty lock discovery will be returned in the response. */
-        properties.add(new LockDiscovery(getLock(Type.WRITE, Scope.EXCLUSIVE)));
-
-        /* lock support information: all locks are lockable. */
-        SupportedLock supportedLock = new SupportedLock();
-        supportedLock.addEntry(Type.WRITE, Scope.EXCLUSIVE);
-        properties.add(supportedLock);
-        
-//      if (rfc4122Uri != null) {
-//	      properties.add(new HrefProperty(BindConstants.RESOURCEID, rfc4122Uri, true));
-//	  }
-//	
-//	  Set<ParentElement> parentElements = getParentElements();
-//	  if (!parentElements.isEmpty()) {
-//	      properties.add(new ParentSet(parentElements));
-//	  }
         
     }
 	
+	@Override
+	public void spool(OutputContext outputContext) throws IOException {
+		if (isCollection()){
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+			return;
+		}
+		OutputStream os = outputContext.getOutputStream(); 
+		if (os != null){
+			try {
+				if (exists()){
+					download(os);
+				}
+			} catch (Exception e){
+				log.error("Error spooling: " + e.getMessage());
+			} 
+		}
+		
+	}
 	@Override
 	public String getComplianceClass() {
 		return COMPLIANCE_CLASSES;
