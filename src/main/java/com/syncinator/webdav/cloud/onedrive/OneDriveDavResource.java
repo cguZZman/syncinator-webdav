@@ -1,6 +1,7 @@
 package com.syncinator.webdav.cloud.onedrive;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 import javax.servlet.http.HttpServletResponse;
@@ -11,6 +12,7 @@ import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
+import org.apache.jackrabbit.webdav.io.InputContext;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 import org.ehcache.Cache;
 
@@ -19,6 +21,7 @@ import com.onedrive.api.request.ItemRequest;
 import com.onedrive.api.resource.Item;
 import com.onedrive.api.resource.support.ItemCollection;
 import com.onedrive.api.resource.support.ItemReference;
+import com.onedrive.api.resource.support.UploadSession;
 import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.server.SyncinatorDavResource;
 
@@ -141,4 +144,40 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	public void removeMember(DavResource member) throws DavException {
 		((OneDriveDavResource)member).itemRequest.delete();
 	}
+	
+	@Override
+	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
+		long size = inputContext.getContentLength();
+		String fileName = Text.getName(resource.getResourcePath());
+		if (size > SIMPLE_UPLOAD_LIMIT_SIZE){
+			log.info("Big file detected.");
+			UploadSession session = itemRequest.itemByPath(fileName).uploadCreateSession().create();
+			InputStream is = inputContext.getInputStream();
+			byte[] data = new byte[(int) SIMPLE_UPLOAD_LIMIT_SIZE];
+			int n = 0, r = 0, startIndex = 0;
+			long remaining = size;
+			try {
+				while ((n = is.read(data)) != -1 && remaining > 0) {
+					while (n < data.length){
+						if ((r = is.read(data, n, data.length - n)) == -1) break;
+						n += r;
+					}
+					session = session.uploadFragment(startIndex, startIndex+n-1, size, data);
+					startIndex += n;
+					remaining = size - startIndex;
+					if (remaining < SIMPLE_UPLOAD_LIMIT_SIZE){
+						data = new byte[(int) remaining];
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			log.info("Completed: " + session.isComplete());
+		} else {
+			Item item = new Item(onedrive);
+			item.setName(fileName);
+			itemRequest.children().upload(item, inputContext.getInputStream());
+		}
+	}
+	
 }

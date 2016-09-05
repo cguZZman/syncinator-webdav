@@ -44,6 +44,8 @@ public abstract class SyncinatorDavResource implements DavResource {
 
 	protected Logger log = LoggerFactory.getLogger(this.getClass());
 
+	public long SIMPLE_UPLOAD_LIMIT_SIZE = 5 * 1024 * 1024;
+	
 	protected DavPropertySet properties = new DavPropertySet();
 	protected boolean propsInitialized = false;
 	protected List<DavResource> children = new ArrayList<DavResource>();
@@ -250,12 +252,6 @@ public abstract class SyncinatorDavResource implements DavResource {
 	public MultiStatusResponse alterProperties(List<? extends PropEntry> changeList) throws DavException {
 		// TODO Auto-generated method stub
 		return null;
-	}
-
-	@Override
-	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
