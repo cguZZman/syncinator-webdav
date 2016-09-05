@@ -151,7 +151,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 		String fileName = Text.getName(resource.getResourcePath());
 		if (size > SIMPLE_UPLOAD_LIMIT_SIZE){
 			log.info("Big file detected.");
-			UploadSession session = itemRequest.itemByPath(fileName).uploadCreateSession().create();
+			UploadSession session = itemRequest.itemByPath(fileName).uploadCreateSession().create(Item.CONFLICT_BEHAVIOR_REPLACE);
 			InputStream is = inputContext.getInputStream();
 			byte[] data = new byte[(int) SIMPLE_UPLOAD_LIMIT_SIZE];
 			int n = 0, r = 0, startIndex = 0;
@@ -172,10 +172,14 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			log.info("Completed: " + session.isComplete());
+			log.info("Completed: " + session.isComplete() + ", remaining: "+ remaining + ", n: "+n);
+			if (!session.isComplete()){
+				throw new DavException(HttpServletResponse.SC_PRECONDITION_FAILED);
+			}
 		} else {
 			Item item = new Item(onedrive);
 			item.setName(fileName);
+			item.setConflictBehavior(Item.CONFLICT_BEHAVIOR_REPLACE);
 			itemRequest.children().upload(item, inputContext.getInputStream());
 		}
 	}

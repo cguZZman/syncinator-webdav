@@ -129,8 +129,6 @@ public abstract class SyncinatorDavResource implements DavResource {
 				propsInitialized = false;
 				log.error(e.getMessage() + " - [" + getResourcePath() + "]");
 				return;
-				//throw new DavException(HttpServletResponse.SC_BAD_GATEWAY, e.getMessage());
-				//response.sendError(HttpServletResponse.SC_BAD_GATEWAY);
 			}
 			
 			properties.add(new DefaultDavProperty<String>(DavPropertyName.GETLASTMODIFIED, IOUtil.getLastModified(modificationTime)));
