@@ -172,8 +172,8 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			log.info("Completed: " + session.isComplete() + ", remaining: "+ remaining + ", n: "+n);
 			if (!session.isComplete()){
+				log.error("Upload not completed! Remaining = "+ remaining + ", n = "+n);
 				throw new DavException(HttpServletResponse.SC_PRECONDITION_FAILED);
 			}
 		} else {
