@@ -5,7 +5,9 @@ import java.io.OutputStream;
 
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.jackrabbit.util.Text;
 import org.apache.jackrabbit.webdav.DavException;
+import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
@@ -16,6 +18,7 @@ import com.onedrive.api.OneDrive;
 import com.onedrive.api.request.ItemRequest;
 import com.onedrive.api.resource.Item;
 import com.onedrive.api.resource.support.ItemCollection;
+import com.onedrive.api.resource.support.ItemReference;
 import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.server.SyncinatorDavResource;
 
@@ -67,7 +70,6 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	
 	@Override
 	public void fetchChildren() throws Exception {
-		children.clear();
 		String path = getLocator().getResourcePath();
 		String workspace = getLocator().getWorkspacePath();
 		ItemCollection collection = null;
@@ -96,16 +98,9 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	@Override
 	public void download(OutputStream os) throws IOException {
 		try {
-			if (!response.isCommitted()) {
-				response.sendRedirect(item.getDownloadUrl());
-				//response.setHeader("Location", item.getDownloadUrl());
-				//response.sendError(HttpServletResponse.SC_FOUND);
-			} else {
-				log.info("commited??");
-			}
-			
+			response.sendRedirect(item.getDownloadUrl());
 		} catch (Exception e){
-			log.error("Error downloading: " + e.getMessage());
+			log.error("Error redirecting: " + e.getMessage());
 		}
 	}
 	
@@ -115,4 +110,35 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 		return isRoot() || (item != null && item.getFolder() != null); 
 	}
 	
+	@Override
+	public DavResource getCollection() {
+		DavResourceLocator resourceLocator = getLocator().getFactory().createResourceLocator(getLocator().getPrefix(), getLocator().getWorkspacePath(), Text.getRelativeParent( getLocator().getResourcePath(), 1));
+		OneDriveDavResource parent = null;
+		try {
+			parent = new OneDriveDavResource(resourceLocator, item, config, request, response);
+		} catch (Exception e) {
+			log.error("Error getting parent: " + e.getMessage());
+		}
+		return parent;
+	}
+	
+	@Override
+	public void move(DavResource destination) throws DavException {
+		itemRequest.move(Text.getRelativeParent(destination.getResourcePath(), 1), 
+				Text.getName(destination.getResourcePath()));
+	}
+	
+	@Override
+	public void copy(DavResource destination, boolean shallow) throws DavException {
+		ItemReference parent = new ItemReference();
+		parent.setPath(Text.getRelativeParent(destination.getResourcePath(), 1));
+		log.info("parent: " + parent.getPath());
+		itemRequest.copy(parent, Text.getName(destination.getResourcePath()));
+
+	}
+	
+	@Override
+	public void removeMember(DavResource member) throws DavException {
+		((OneDriveDavResource)member).itemRequest.delete();
+	}
 }

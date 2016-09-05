@@ -36,12 +36,12 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
 		if (!request.getMethod().equals(DavMethods.METHOD_PROPFIND) && !request.getMethod().equals(DavMethods.METHOD_GET)){
-			log.info(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
-			Enumeration<String> names = request.getHeaderNames();
-			while (names.hasMoreElements()){
-				String name = names.nextElement();
-				log.info(">> "+ name + ": " + request.getHeader(name));
-			}
+			System.out.println(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
+//			Enumeration<String> names = request.getHeaderNames();
+//			while (names.hasMoreElements()){
+//				String name = names.nextElement();
+//				log.info(">> "+ name + ": " + request.getHeader(name));
+//			}
 		}
 		
 		String workspace = locator.getWorkspacePath();
@@ -51,6 +51,7 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 			if (workspace.equals("/onedrive")){
 				SyncinatorDavResource resource = resourceCache.get(locator.getResourcePath());
 				if (resource == null){
+					//System.out.println("<<<"+locator.getResourcePath()+">>>");
 					resource = new OneDriveDavResource(locator, config, request, response);
 					resourceCache.putIfAbsent(locator.getResourcePath(), resource);
 				}

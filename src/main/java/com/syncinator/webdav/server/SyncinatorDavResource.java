@@ -253,31 +253,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 	}
 
 	@Override
-	public DavResource getCollection() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
 	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void removeMember(DavResource member) throws DavException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void move(DavResource destination) throws DavException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void copy(DavResource destination, boolean shallow) throws DavException {
 		// TODO Auto-generated method stub
 
 	}
