@@ -3,7 +3,6 @@ package com.syncinator.webdav.cloud.onedrive;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Date;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -15,17 +14,14 @@ import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.io.InputContext;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
-import org.ehcache.Cache;
 import org.springframework.util.StringUtils;
 
 import com.onedrive.api.OneDrive;
 import com.onedrive.api.request.ItemRequest;
 import com.onedrive.api.resource.Item;
-import com.onedrive.api.resource.facet.FileSystemInfo;
 import com.onedrive.api.resource.support.ItemCollection;
 import com.onedrive.api.resource.support.ItemReference;
 import com.onedrive.api.resource.support.UploadSession;
-import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.server.SyncinatorDavResource;
 
 public class OneDriveDavResource extends SyncinatorDavResource {
@@ -33,7 +29,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	private OneDrive onedrive;
 	private ItemRequest itemRequest;
     private Item item;
-	private Cache<String, SyncinatorDavResource> resourceCache;
+	
 	
 	public OneDriveDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
 		this(locator, null, config, request, response);
@@ -51,7 +47,6 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 		} else {
 			throw new DavException(HttpServletResponse.SC_NOT_FOUND);
 		}
-		resourceCache = SyncinatorCacheManager.getResourceCache();
 	}
 	
 	@Override
@@ -72,7 +67,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			} else  if (item.getFolder() != null){
 				contentType = "text/directory";
 			}
-			log.info(getResourcePath() + ": "+ contentType);
+			//log.info(getResourcePath() + ": "+ contentType);
 			size = item.getSize();
 			eTag = item.geteTag();
 		}
@@ -90,7 +85,6 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 					DavResourceLocator resourceLocator = getLocator().getFactory().createResourceLocator(getLocator().getPrefix(), workspace, path + "/" + item.getName());
 					OneDriveDavResource resource = new OneDriveDavResource(resourceLocator, item, config, request, response);
 					children.add(resource);
-					resourceCache.putIfAbsent(resourceLocator.getResourcePath(), resource);
 				} catch (DavException e) {
 					e.printStackTrace();
 				}	

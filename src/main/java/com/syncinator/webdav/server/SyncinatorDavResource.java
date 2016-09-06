@@ -21,7 +21,6 @@ import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
 import org.apache.jackrabbit.webdav.bind.BindConstants;
-import org.apache.jackrabbit.webdav.io.InputContext;
 import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.lock.ActiveLock;
 import org.apache.jackrabbit.webdav.lock.LockDiscovery;
@@ -37,8 +36,11 @@ import org.apache.jackrabbit.webdav.property.DefaultDavProperty;
 import org.apache.jackrabbit.webdav.property.PropEntry;
 import org.apache.jackrabbit.webdav.property.ResourceType;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
+import org.ehcache.Cache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.syncinator.webdav.SyncinatorCacheManager;
 
 public abstract class SyncinatorDavResource implements DavResource {
 
@@ -65,15 +67,13 @@ public abstract class SyncinatorDavResource implements DavResource {
 	
 	protected ResourceConfig config;
 	
+	public static final DavPropertyName ISFOLDER = DavPropertyName.create("isFolder");
+	public static final DavPropertyName ISHIDDEN = DavPropertyName.create("ishidden");
+	
 	public static final String METHODS = DavResource.METHODS + ", " + BindConstants.METHODS;
-    public static final String COMPLIANCE_CLASSES = DavCompliance.concatComplianceClasses(
-        new String[] {
-            DavCompliance._1_,
-            DavCompliance._2_,
-            DavCompliance._3_,
-            DavCompliance.BIND
-        }
-    );
+    public static final String COMPLIANCE_CLASSES = DavCompliance.concatComplianceClasses(new String[] { DavCompliance._1_, DavCompliance._2_, DavCompliance._3_, DavCompliance.BIND });
+    
+    private Cache<String, SyncinatorDavResource> resourceCache;
     
 	public SyncinatorDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
 		this.locator = locator;
@@ -94,6 +94,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 		if (localAccountId == null){
 			throw new DavException(HttpServletResponse.SC_FORBIDDEN);
 		}
+		resourceCache = SyncinatorCacheManager.getResourceCache();
 	}
 
 	protected abstract void fetchResource() throws Exception;
@@ -108,6 +109,11 @@ public abstract class SyncinatorDavResource implements DavResource {
 					childrenInitialized = true;
 					try {
 						fetchChildren();
+						for (DavResource resource : children){
+							SyncinatorDavResource syncinatorResource = (SyncinatorDavResource) resource;
+							syncinatorResource.initProperties();
+							resourceCache.putIfAbsent(resource.getLocator().getResourcePath(), (SyncinatorDavResource) syncinatorResource);
+						}
 					} catch(Exception e){
 						childrenInitialized = false;
 						log.error(e.getMessage());
@@ -144,8 +150,12 @@ public abstract class SyncinatorDavResource implements DavResource {
 	        }
 	        if (isCollection()) {
 	            properties.add(new ResourceType(ResourceType.COLLECTION));
+	            properties.add(new DefaultDavProperty<String>(ISFOLDER, "t"));
+	            properties.add(new DefaultDavProperty<String>(ISHIDDEN, "0"));
+	            
 	            // Windows XP support
 	            properties.add(new DefaultDavProperty<String>(DavPropertyName.ISCOLLECTION, "1"));
+	            
 	        } else {
 	            properties.add(new ResourceType(ResourceType.DEFAULT_RESOURCE));
 	            // Windows XP support
