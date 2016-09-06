@@ -37,11 +37,11 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
 		if (!request.getMethod().equals(DavMethods.METHOD_PROPFIND) && !request.getMethod().equals(DavMethods.METHOD_GET)){
 			System.out.println(">> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
-//			Enumeration<String> names = request.getHeaderNames();
-//			while (names.hasMoreElements()){
-//				String name = names.nextElement();
-//				log.info(">> "+ name + ": " + request.getHeader(name));
-//			}
+			Enumeration<String> names = request.getHeaderNames();
+			while (names.hasMoreElements()){
+				String name = names.nextElement();
+				log.info(">> "+ name + ": " + request.getHeader(name));
+			}
 		}
 		
 		String workspace = locator.getWorkspacePath();

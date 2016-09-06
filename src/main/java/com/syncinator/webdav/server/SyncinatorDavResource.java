@@ -154,8 +154,8 @@ public abstract class SyncinatorDavResource implements DavResource {
 	
 	        /* set current lock information. If no lock is set to this resource,
 	        an empty lock discovery will be returned in the response. */
-	        properties.add(new LockDiscovery(getLock(Type.WRITE, Scope.EXCLUSIVE)));
-	
+	        //properties.add(new LockDiscovery(getLock(Type.WRITE, Scope.EXCLUSIVE)));
+	        properties.add(new LockDiscovery());
 	        /* lock support information: all locks are lockable. */
 	        SupportedLock supportedLock = new SupportedLock();
 	        supportedLock.addEntry(Type.WRITE, Scope.EXCLUSIVE);
@@ -237,67 +237,64 @@ public abstract class SyncinatorDavResource implements DavResource {
 
 	@Override
 	public void setProperty(DavProperty<?> property) throws DavException {
-		//alterProperty(property);
+		log.info("*** setProperty NOT IMPLEMENTED!");
 	}
 
 	@Override
 	public void removeProperty(DavPropertyName propertyName) throws DavException {
-		// TODO Auto-generated method stub
-
+		log.info("*** removeProperty NOT IMPLEMENTED!");
 	}
 
 	@Override
 	public MultiStatusResponse alterProperties(List<? extends PropEntry> changeList) throws DavException {
-		// TODO Auto-generated method stub
+		log.info("*** alterProperties NOT IMPLEMENTED!");
 		return null;
 	}
 
 	@Override
 	public boolean isLockable(Type type, Scope scope) {
-		// TODO Auto-generated method stub
+		log.info("*** isLockable NOT IMPLEMENTED!");
 		return false;
 	}
 
 	@Override
 	public boolean hasLock(Type type, Scope scope) {
-		// TODO Auto-generated method stub
+		log.info("*** hasLock NOT IMPLEMENTED!");
 		return false;
 	}
 
 	@Override
 	public ActiveLock getLock(Type type, Scope scope) {
-		// TODO Auto-generated method stub
+		log.info("*** getLock NOT IMPLEMENTED!");
 		return null;
 	}
 
 	@Override
 	public ActiveLock[] getLocks() {
-		// TODO Auto-generated method stub
+		log.info("*** getLocks NOT IMPLEMENTED!");
 		return null;
 	}
 
 	@Override
 	public ActiveLock lock(LockInfo reqLockInfo) throws DavException {
-		// TODO Auto-generated method stub
+		log.info("*** lock NOT IMPLEMENTED!");
 		return null;
 	}
 
 	@Override
 	public ActiveLock refreshLock(LockInfo reqLockInfo, String lockToken) throws DavException {
-		// TODO Auto-generated method stub
+		log.info("*** refreshLock NOT IMPLEMENTED!");
 		return null;
 	}
 
 	@Override
 	public void unlock(String lockToken) throws DavException {
-		// TODO Auto-generated method stub
-
+		log.info("*** unlock NOT IMPLEMENTED!");
 	}
 
 	@Override
 	public void addLockManager(LockManager lockmgr) {
-		// TODO Auto-generated method stub
-
+		log.info("*** addLockManager NOT IMPLEMENTED!");
 	}
 
 	@Override

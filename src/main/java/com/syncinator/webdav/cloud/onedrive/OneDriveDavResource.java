@@ -3,6 +3,7 @@ package com.syncinator.webdav.cloud.onedrive;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Date;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -15,10 +16,12 @@ import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.io.InputContext;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 import org.ehcache.Cache;
+import org.springframework.util.StringUtils;
 
 import com.onedrive.api.OneDrive;
 import com.onedrive.api.request.ItemRequest;
 import com.onedrive.api.resource.Item;
+import com.onedrive.api.resource.facet.FileSystemInfo;
 import com.onedrive.api.resource.support.ItemCollection;
 import com.onedrive.api.resource.support.ItemReference;
 import com.onedrive.api.resource.support.UploadSession;
@@ -57,6 +60,9 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			item = itemRequest.fetch();
 		}
 		if (item != null){
+			if (!StringUtils.isEmpty(item.getWebDavUrl())){
+				log.info(">> WebDavUrl of " + getResourcePath() + ": " + item.getWebDavUrl());
+			}
 			if (item.getFileSystemInfo() != null){
 				modificationTime = item.getFileSystemInfo().getLastModifiedDateTime().getTime();
 				creationTime = item.getFileSystemInfo().getCreatedDateTime().getTime();
@@ -66,6 +72,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 			} else  if (item.getFolder() != null){
 				contentType = "text/directory";
 			}
+			log.info(getResourcePath() + ": "+ contentType);
 			size = item.getSize();
 			eTag = item.geteTag();
 		}
