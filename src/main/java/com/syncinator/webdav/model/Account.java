@@ -1,13 +1,14 @@
 package com.syncinator.webdav.model;
 
 public class Account {
-	private String provider;
+	private Provider provider;
 	private String owner;
 	private String driveId;
-	public String getProvider() {
+	
+	public Provider getProvider() {
 		return provider;
 	}
-	public void setProvider(String provider) {
+	public void setProvider(Provider provider) {
 		this.provider = provider;
 	}
 	public String getOwner() {
