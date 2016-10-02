@@ -9,6 +9,7 @@ import com.syncinator.webdav.model.Provider;
 
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ObjectPropertyBase;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.Event;
@@ -66,6 +67,7 @@ public class AccountWizard extends Stage {
 		backButton.setOnAction(e -> {previousStep();});
 		navigationBar.getChildren().add(backButton);
 		nextButton = new Button("Next >");
+		nextButton.setDisable(true);
 		nextButton.setPrefWidth(80);
 		nextButton.setOnAction(e -> {nextStep();});
 		navigationBar.getChildren().add(nextButton);
@@ -107,11 +109,12 @@ public class AccountWizard extends Stage {
 				Alert alert = new Alert(AlertType.WARNING);
 				alert.setTitle("Syncinator");
 				alert.setHeaderText(null);
-				alert.setContentText("Permission denied by user.");
+				alert.setContentText("No account added. Permission denied by user.");
+				alert.initOwner(getOwner());
 				alert.showAndWait();
 			} else if (currentLocation.contains("code=")){
 				UriComponents uriComponents = UriComponentsBuilder.fromHttpUrl(currentLocation).build();
-				driveId = OneDriveConnectionRepository.addConnection(uriComponents.getQueryParams().getFirst("code"));
+				driveId = OneDriveConnectionRepository.addConnectionWithAuthCode(uriComponents.getQueryParams().getFirst("code"));
 				fireEvent(new WindowEvent(this, ADD_ACCOUNT));
 			}
 		}
@@ -133,6 +136,9 @@ public class AccountWizard extends Stage {
 			ObservableList<Provider> items = FXCollections.observableArrayList(Provider.ONEDRIVE, Provider.GDRIVE);
 			providerView.setItems(items);
 			providerView.setCellFactory((ListView<Provider> param) -> { return new ProviderCell(); });
+			providerView.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends Provider> observable, Provider oldValue, Provider newValue) -> {
+				nextButton.setDisable(newValue == null);
+			});
 		}
 		return providerView;
 	}
@@ -152,7 +158,17 @@ public class AccountWizard extends Stage {
 	}
 	
 	private void loadLogin(){
-		getLoginView().getEngine().load("https://login.live.com/oauth20_authorize.srf?client_id=0000000048145120&scope=wl.offline_access+wl.skydrive&response_type=code&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf&display=touch&state=1111");
+		if (selectedProvider.equals(Provider.ONEDRIVE)) {
+			getLoginView().getEngine().load("https://login.live.com/oauth20_authorize.srf?client_id=0000000048145120&scope=wl.offline_access+wl.skydrive&response_type=code&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf&display=touch&state=1111");
+		} else {
+			Alert alert = new Alert(AlertType.INFORMATION);
+			alert.setTitle("Syncinator");
+			alert.setHeaderText(null);
+			alert.setContentText("Provider not implemented.");
+			alert.initOwner(getOwner());
+			alert.showAndWait();
+			previousStep();
+		}
 	}
 	
 	static class ProviderCell extends ListCell<Provider> {

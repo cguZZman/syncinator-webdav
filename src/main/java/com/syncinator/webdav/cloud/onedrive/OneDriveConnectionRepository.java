@@ -20,7 +20,7 @@ public class OneDriveConnectionRepository {
 		repository.put(id, connection);
 	}
 	
-	public static String addConnection(String authCode) {
+	public static String addConnectionWithAuthCode(String authCode) {
 		OneDrive oneDrive = getOneDriveInstance();
 		oneDrive.setAuthorizationCode(authCode);
 		oneDrive.setAccessTokenListener(new InMemoryAccessTokenListener());
@@ -34,6 +34,18 @@ public class OneDriveConnectionRepository {
 		oneDrive.setAccessTokenListener(idTokenListener);
 		addConnection(id, oneDrive);
 		return id;
+	}
+	
+	public static void addConnectionFromDisk(String id) {
+		IdSerializatorAccessTokenListener tokenListener = new IdSerializatorAccessTokenListener(id);
+		OneDrive oneDrive = getOneDriveInstance();
+		oneDrive.setAccessTokenListener(tokenListener);
+		oneDrive.setExistingToken(tokenListener.onAccessTokenRequired(oneDrive));
+		addConnection(id, oneDrive);
+	}
+	
+	public static OneDrive removeConnection(String id){
+		return repository.remove(id);
 	}
 	
 	private static OneDrive getOneDriveInstance() {
