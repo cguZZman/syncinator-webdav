@@ -1,12 +1,24 @@
 package com.syncinator.webdav.ui;
 
+import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import com.onedrive.api.OneDrive;
+import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
 import com.syncinator.webdav.model.Provider;
 
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.ObjectPropertyBase;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.Event;
+import javafx.event.EventHandler;
+import javafx.event.EventType;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -20,14 +32,20 @@ import javafx.scene.layout.Region;
 import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 
 public class AccountWizard extends Stage {
-	private String step = "provider";
+	private String step = "select-provider";
 	private Label title;
 	private ListView<Provider> providerView;
 	private WebView loginView;
 	private Button nextButton;
 	private Button backButton;
+	private String currentLocation;
+	public static final EventType<WindowEvent> ADD_ACCOUNT = new EventType<WindowEvent>(Event.ANY, "ADD_ACCOUNT");
+	
+	private Provider selectedProvider;
+	private String driveId;
 	
 	public AccountWizard(){
 		setTitle("Add an account...");
@@ -65,26 +83,45 @@ public class AccountWizard extends Stage {
 		scene.getStylesheets().add("css/styles.css");
 		scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {if (e.getCode().equals(KeyCode.ESCAPE)) close();});
 		setScene(scene);
-		setWidth(450);
-		setHeight(500);
+		setWidth(550);
+		setHeight(660);
 		initModality(Modality.WINDOW_MODAL);
 	}
 	
 	private void nextStep(){
 		BorderPane layout = (BorderPane)getScene().getRoot();
-		if (step.equals("provider")){
-			step = "login";
-			backButton.setDisable(false);
-			layout.setCenter(getLoginView());
-			loadLogin();
-			title.setText("Login into the account:");
+		if (step.equals("select-provider")){
+			Provider provider = getProviderView().getSelectionModel().getSelectedItem();
+			if (provider != null){
+				this.selectedProvider = provider;
+				step = "privider-login";
+				backButton.setDisable(false);
+				nextButton.setDisable(true);
+				layout.setCenter(getLoginView());
+				loadLogin();
+				title.setText("Login into the account:");
+			}
+		} else if (step.equals("privider-login")){
+			if (currentLocation.contains("error=access_denied")){
+				close();
+				Alert alert = new Alert(AlertType.WARNING);
+				alert.setTitle("Syncinator");
+				alert.setHeaderText(null);
+				alert.setContentText("Permission denied by user.");
+				alert.showAndWait();
+			} else if (currentLocation.contains("code=")){
+				UriComponents uriComponents = UriComponentsBuilder.fromHttpUrl(currentLocation).build();
+				driveId = OneDriveConnectionRepository.addConnection(uriComponents.getQueryParams().getFirst("code"));
+				fireEvent(new WindowEvent(this, ADD_ACCOUNT));
+			}
 		}
 	}
 	private void previousStep(){
 		BorderPane layout = (BorderPane)getScene().getRoot();
-		if (step.equals("login")){
-			step = "provider";
+		if (step.equals("privider-login")){
+			step = "select-provider";
 			backButton.setDisable(true);
+			nextButton.setDisable(false);
 			layout.setCenter(getProviderView());
 			title.setText("Select your provider:");
 		}
@@ -93,10 +130,7 @@ public class AccountWizard extends Stage {
 	private ListView<Provider> getProviderView(){
 		if (providerView == null){
 			providerView = new ListView<Provider>();
-			ObservableList<Provider> items = FXCollections.observableArrayList(
-				new Provider("onedrive", "OneDrive", getClass().getResource("/images/provider/onedrive.png").toString()),
-				new Provider("gdrive", "Google Drive", getClass().getResource("/images/provider/google-drive.png").toString())
-			);
+			ObservableList<Provider> items = FXCollections.observableArrayList(Provider.ONEDRIVE, Provider.GDRIVE);
 			providerView.setItems(items);
 			providerView.setCellFactory((ListView<Provider> param) -> { return new ProviderCell(); });
 		}
@@ -107,7 +141,11 @@ public class AccountWizard extends Stage {
 		if (loginView == null){
 			loginView = new WebView();
 			loginView.getEngine().locationProperty().addListener((o, old, location) -> {
+				currentLocation = location;
 				System.out.println(location);
+				if (location.startsWith(OneDrive.MOBILE_REDIRECT_URI)){
+					nextStep();
+				}
 			});
 		}
 		return loginView;
@@ -132,4 +170,44 @@ public class AccountWizard extends Stage {
             }
         }
     }
+	
+	public Provider getSelectedProvider() {
+		return selectedProvider;
+	}
+
+	public String getDriveId() {
+		return driveId;
+	}
+
+	private ObjectProperty<EventHandler<WindowEvent>> onAccountAdded;
+
+	public final void setOnAccountAdded(EventHandler<WindowEvent> value) {
+		onAccountAddedProperty().set(value);
+	}
+
+	public final EventHandler<WindowEvent> getOnAccountAdded() {
+		return (onAccountAdded != null) ? onAccountAdded.get() : null;
+	}
+
+	public final ObjectProperty<EventHandler<WindowEvent>> onAccountAddedProperty() {
+		if (onAccountAdded == null) {
+			onAccountAdded = new ObjectPropertyBase<EventHandler<WindowEvent>>() {
+				@Override
+				protected void invalidated() {
+					setEventHandler(ADD_ACCOUNT, get());
+				}
+
+				@Override
+				public Object getBean() {
+					return this;
+				}
+
+				@Override
+				public String getName() {
+					return "onAccountAdded";
+				}
+			};
+		}
+		return onAccountAdded;
+	}
 }

@@ -5,6 +5,11 @@ public class Account {
 	private String owner;
 	private String driveId;
 	
+	public Account(Provider provider, String owner, String driveId) {
+		this.provider = provider;
+		this.owner = owner;
+		this.driveId = driveId;
+	}
 	public Provider getProvider() {
 		return provider;
 	}

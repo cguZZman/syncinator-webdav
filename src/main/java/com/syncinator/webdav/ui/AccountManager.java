@@ -1,8 +1,13 @@
 package com.syncinator.webdav.ui;
 
+import com.onedrive.api.OneDrive;
+import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
+import com.syncinator.webdav.cloud.onedrive.SyncinatorAccessToken;
 import com.syncinator.webdav.model.Account;
+import com.syncinator.webdav.model.Provider;
 
 import javafx.application.Application;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -19,6 +24,8 @@ import javafx.stage.Stage;
 
 public class AccountManager extends Application {
 
+	private TableView<Account> table;
+	
 	@Override
 	@SuppressWarnings("unchecked")
 	public void start(Stage primaryStage) throws Exception {
@@ -31,7 +38,7 @@ public class AccountManager extends Application {
 		title.setAlignment(Pos.TOP_LEFT);
 		layout.setTop(title);
 		
-		TableView<Account> table = new TableView<Account>();
+		table = new TableView<Account>();
 		TableColumn<Account, String> name = new TableColumn<Account, String>("Provider");
 		name.prefWidthProperty().bind(table.widthProperty().multiply(0.3));
 		TableColumn<Account, String> owner = new TableColumn<Account, String>("Owner");
@@ -40,6 +47,7 @@ public class AccountManager extends Application {
 		driveId.prefWidthProperty().bind(table.widthProperty().multiply(0.3));
 		table.getColumns().addAll(name, owner, driveId);
 		table.setPlaceholder(new Label());
+		table.setItems(FXCollections.observableArrayList());
 		layout.setCenter(table);
 		
 		VBox optionBox = new VBox(10);
@@ -51,6 +59,10 @@ public class AccountManager extends Application {
 		button.setOnAction(e -> {
 			AccountWizard wizard = new AccountWizard();
 			wizard.initOwner(primaryStage);
+			wizard.setOnAccountAdded(ev -> {
+				wizard.close();
+				accountAdded(wizard.getSelectedProvider(), wizard.getDriveId());
+			});
 			wizard.show();
 		});
 		optionBox.getChildren().add(button);
@@ -78,7 +90,15 @@ public class AccountManager extends Application {
         primaryStage.show();
         layout.requestFocus();
 	}
-
+	
+	public void accountAdded(Provider provider, String driveId){
+		if (provider.equals(Provider.ONEDRIVE)){
+			OneDrive onedrive = OneDriveConnectionRepository.getConnection(driveId);
+			SyncinatorAccessToken accessToken = (SyncinatorAccessToken) onedrive.getAccessTokenListener().onAccessTokenRequired(onedrive);
+			table.getItems().add(new Account(provider, accessToken.getOwner(), driveId));	
+		}
+	}
+	
 	public static void main(String[] args) {
 		launch(args);
 	}
