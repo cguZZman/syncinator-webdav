@@ -34,7 +34,7 @@ public class SyncinatorCacheManager {
 			.build();
 	
 	private static PersistentCacheManager persistentCacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-			.with(CacheManagerBuilder.persistence(System.getProperty("user.home", "") + File.separator + ".onedrive" + File.separator + "file_cache.dat")) 
+			.with(CacheManagerBuilder.persistence(System.getProperty("user.home", "") + File.separator + ".syncinator" + File.separator + "file_cache.dat")) 
 			.withCache(CONTENT_ALIAS, 
 					CacheConfigurationBuilder
 						.newCacheConfigurationBuilder(String.class, Byte[].class, 

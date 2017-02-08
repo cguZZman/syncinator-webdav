@@ -23,6 +23,7 @@ import org.apache.jackrabbit.webdav.MultiStatusResponse;
 import org.apache.jackrabbit.webdav.bind.BindConstants;
 import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.lock.ActiveLock;
+import org.apache.jackrabbit.webdav.lock.DefaultActiveLock;
 import org.apache.jackrabbit.webdav.lock.LockDiscovery;
 import org.apache.jackrabbit.webdav.lock.LockInfo;
 import org.apache.jackrabbit.webdav.lock.LockManager;
@@ -288,13 +289,17 @@ public abstract class SyncinatorDavResource implements DavResource {
 	@Override
 	public ActiveLock lock(LockInfo reqLockInfo) throws DavException {
 		log.info("*** lock NOT IMPLEMENTED!");
-		return null;
+		ActiveLock activeLock = new DefaultActiveLock();
+		activeLock.setOwner("carlos");
+		return activeLock;
 	}
 
 	@Override
 	public ActiveLock refreshLock(LockInfo reqLockInfo, String lockToken) throws DavException {
 		log.info("*** refreshLock NOT IMPLEMENTED!");
-		return null;
+		ActiveLock activeLock = new DefaultActiveLock();
+		activeLock.setOwner("carlos");
+		return activeLock;
 	}
 
 	@Override
