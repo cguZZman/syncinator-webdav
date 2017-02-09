@@ -1,7 +1,6 @@
 package com.syncinator.webdav.server;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -100,7 +99,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 
 	protected abstract void fetchResource() throws Exception;
 	protected abstract void fetchChildren() throws Exception;
-	protected abstract void download(OutputStream os) throws Exception;
+	protected abstract void download(OutputContext context) throws IOException;
 
 	@Override
 	public DavResourceIterator getMembers() {
@@ -181,15 +180,8 @@ public abstract class SyncinatorDavResource implements DavResource {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 			return;
 		}
-		OutputStream os = outputContext.getOutputStream(); 
-		if (os != null){
-			try {
-				if (exists()){
-					download(os);
-				}
-			} catch (Exception e){
-				log.error("Error spooling: " + e.getMessage());
-			} 
+		if (exists()){
+			download(outputContext);
 		}
 		
 	}
@@ -205,8 +197,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 
 	@Override
 	public String getDisplayName() {
-		String resPath = getResourcePath();
-        return (resPath != null) ? Text.getName(resPath) : "carlos' onedrive";
+        return Text.getName(getResourcePath());
 	}
 
 	@Override

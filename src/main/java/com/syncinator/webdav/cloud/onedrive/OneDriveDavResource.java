@@ -3,6 +3,9 @@ package com.syncinator.webdav.cloud.onedrive;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Enumeration;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -13,6 +16,7 @@ import org.apache.jackrabbit.webdav.DavResourceLocator;
 import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.io.InputContext;
+import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 import org.springframework.util.StringUtils;
 
@@ -100,11 +104,46 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	}
 	
 	@Override
-	public void download(OutputStream os) throws IOException {
+	public void download(OutputContext context) throws IOException {
+		InputStream is = null;
+		long downloaded = 0;
 		try {
-			response.sendRedirect(item.getDownloadUrl());
+			log.info(item.getDownloadUrl());
+			HttpURLConnection connection = (HttpURLConnection) new URL(item.getDownloadUrl()).openConnection();
+			for (Enumeration<String> e = request.getHeaderNames(); e.hasMoreElements();){
+				String header = e.nextElement();
+				if (!header.equals("Host")){
+					connection.setRequestProperty(header, request.getHeader(header));
+				}
+			}
+			for (String header: connection.getHeaderFields().keySet()){
+				String value = connection.getHeaderField(header);
+				log.info("<< "+ header + ": " + value);
+				if (header != null) {
+					response.setHeader(header, value);
+				}
+			}
+			response.setStatus(connection.getResponseCode());
+			is = new URL(item.getDownloadUrl()).openStream();
+			OutputStream os = context.getOutputStream();
+			byte[] buffer = new byte[4096];
+		    int length;
+		    boolean started = false;
+		    while ((length = is.read(buffer)) > 0) {
+		    	downloaded += length;
+		    	if (!started) {
+		    		log.info("Starting download ["+getDisplayName()+"]...");
+		    		started = true;
+		    	}
+		        os.write(buffer, 0, length);
+		    }
+		    log.info("Download finished ["+getDisplayName()+"].");
 		} catch (Exception e){
-			log.error("Error redirecting: " + e.getMessage());
+			log.error("Error at byte "+downloaded+ ": " + e.getMessage(), e);
+		} finally {
+			if (is != null) {
+				is.close();
+			}
 		}
 	}
 	
