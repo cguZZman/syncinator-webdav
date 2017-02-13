@@ -277,6 +277,7 @@ public class DownloadManager {
 								abort = true;
 							} catch (Exception e){
 								log.error("  Unexpected error at position " + lowerByte+ ": " + e.getMessage(), e);
+								abort = true;
 							} finally {
 								if (aFile != null) {
 									aFile.close();

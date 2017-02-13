@@ -184,7 +184,9 @@ public abstract class SyncinatorDavResource implements DavResource {
 			outputContext.setContentType(contentType);
 			outputContext.setModificationTime(modificationTime);
 			outputContext.setETag(eTag);
-			download(outputContext);
+			if (outputContext.getOutputStream() != null) {
+				download(outputContext);
+			}
 		}
 		
 	}
