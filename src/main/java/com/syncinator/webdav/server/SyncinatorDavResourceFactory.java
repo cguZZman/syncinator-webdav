@@ -39,7 +39,9 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 			log.info(">>> "+request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
 			for (Enumeration<String> names = request.getHeaderNames(); names.hasMoreElements();){
 				String name = names.nextElement();
-				log.info(">> "+ name + ": " + request.getHeader(name));
+//				if (name.equals("Range")) {
+					log.info(">> "+ name + ": " + request.getHeader(name));
+//				}
 			}
 		}
 		

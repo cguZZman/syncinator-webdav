@@ -1,0 +1,347 @@
+package com.syncinator.webdav.server;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.catalina.connector.ClientAbortException;
+import org.apache.jackrabbit.webdav.io.OutputContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.syncinator.webdav.SyncinatorWebdavApplication;
+
+public class DownloadManager {
+	private static Logger log = LoggerFactory.getLogger(DownloadManager.class);
+	private static final String BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "downloads";
+	private static Map<String, Item> itemMap = new HashMap<String, Item>();
+	
+	static {
+		File baseDir = new File(BASE_DIR);
+		baseDir.mkdirs();
+		for (File file : baseDir.listFiles()){
+			file.delete();
+		}
+	}
+	
+	public static void main(String[] args) {
+		List<Long[]> ranges = getRequestRangers("bytes=-2,500-600,601-999", 1000);
+		for (Long[] range : ranges) {
+			System.out.println("From " + range[0] + " to " + range[1]);			
+		}
+	}
+	private static List<Long[]> getRequestRangers(String ranges, long totalSize){
+		List<Long[]> list = new ArrayList<>();
+		if (ranges == null){
+			list.add(new Long[]{0L,totalSize-1});
+		} else {
+			for (String range : ranges.split("\\=")[1].split(",")){
+				int index = range.indexOf('-');
+				Long start = null;
+				Long end = null;
+				if (index > 0) {
+					start = Long.valueOf(range.substring(0, index));
+				}
+				if (index < range.length() - 1) {
+					end = Long.valueOf(range.substring(index+1));
+				}
+				if (start == null) {
+					start = totalSize - end;
+					end = totalSize - 1;
+				}
+				if (end == null) {
+					end = totalSize - 1;
+				}
+				list.add(new Long[]{start, end});
+			}
+		}
+		return list;
+	}
+	
+	private static ItemPart createPart(String id, Long[] range) {
+		ItemPart part = new ItemPart();
+		part.setStart(range[0]);
+		part.setPosition(range[0]);
+		part.setEnd(range[1]);
+		part.setFinalEnd(range[1]);
+		part.setOwner(Thread.currentThread());
+		part.setStatus(ItemPart.STATUS_CREATED);
+		part.setFile(new File(BASE_DIR, id +"."+range[0]+"-"+range[1]));
+		return part;
+	}
+//	static {
+//		Item item = new Item();
+//		item.setSize(size);
+//		item.parts = new TreeSet<ItemPart>();
+//		ItemPart part = createPart("C899E30C041941B5!197547", new Long[]{0L, 5824639L});
+//		part.setStatus(ItemPart.STATUS_FINISHED);
+//		part.setPosition(part.getEnd()+1);
+//		item.parts.add(part);
+//		itemMap.put("C899E30C041941B5!197547", item);
+//	}
+	public static void download(String id, long size, String url, String requestedRange, OutputContext context) throws IOException {
+		Item item = null;
+		List<Long[]> ranges = getRequestRangers(requestedRange, size);
+		synchronized (itemMap) {
+			item = itemMap.get(id);
+			if (item == null) {
+				item = new Item();
+				item.setSize(size);
+				item.parts = new TreeSet<ItemPart>();
+				itemMap.put(id, item);
+			}
+		}
+		long totalNeededSize = 0;
+		for (Long[] range : ranges) {
+			totalNeededSize += range[1] - range[0] + 1;
+		}
+		context.setContentLength(totalNeededSize);
+		OutputStream ros = context.getOutputStream();
+		boolean abort = false;
+		for (int i=0; i<ranges.size() && !abort; i++) {
+			long lowerByte = ranges.get(i)[0];
+			long upperByte = ranges.get(i)[1];
+			
+			while (lowerByte <= upperByte && !abort){
+				log.info("+ Looking for [" + lowerByte + " -> " + upperByte + "]");
+				ItemPart workWith = null;
+				synchronized (item.parts) {
+					ItemPart stopPart = null;
+					Iterator<ItemPart> iterator = item.parts.iterator();
+					while (iterator.hasNext()) {
+						ItemPart part = iterator.next();
+						if (part.status == ItemPart.STATUS_INVALID) {
+							continue;
+						}
+						log.info("  Testing [" + part.start + " -> " + part.finalEnd + " | " + part.position + "]");
+						if (lowerByte == part.start){
+							workWith = part;
+							break;
+						} else if (part.start < lowerByte) {
+							if (lowerByte <= part.finalEnd) {
+								if (lowerByte < part.position) {
+									workWith = part;
+								}
+								break;
+							}
+						} else {
+							stopPart = part;
+							break;
+						}
+					}
+					if (workWith != null) {
+						log.info("\tFound!");
+					}
+					if (workWith == null && stopPart == null && iterator.hasNext()) {
+						ItemPart part = iterator.next();
+						log.info("  Testing stop [" + part.start + " -> " + part.finalEnd + " | " + part.position + "]");
+						if (lowerByte < part.start && part.start < upperByte && (workWith == null || workWith.position < part.position)) {
+							stopPart = part;
+							log.info("\tFound!");
+						}
+					}
+					if (workWith == null) {
+						workWith = createPart(id, new Long[]{lowerByte, stopPart!=null?stopPart.start:upperByte});
+						log.info("  Creating new part [" + workWith.start + " -> " + workWith.finalEnd + "]");
+						item.parts.add(workWith);
+					}
+				}
+				
+				if (workWith.owner == Thread.currentThread() && workWith.status == ItemPart.STATUS_CREATED) {
+					log.info("  Downloading from cloud drive...");
+					FileOutputStream fos = null;
+					InputStream is = null;
+					int length=0;
+					try {
+						workWith.status = ItemPart.STATUS_STARTED;
+						fos = new FileOutputStream(workWith.file);
+						HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+//						for (Entry<String,String> e : requestHeaderMap.entrySet()){
+//							String header = e.getKey();
+//							if (!header.equals("range")) {
+//								connection.setRequestProperty(e.getKey(), e.getValue());
+//							}
+//						}
+						if (lowerByte > 0 || upperByte < size-1) {
+							String rangeHeader = "bytes=" + lowerByte + "-" + upperByte;
+							connection.setRequestProperty("range", rangeHeader);
+							log.info("  Requesting partial file: " + rangeHeader);
+						} else {
+							log.info("  Requesting complete file");
+						}
+//						for (String header: connection.getHeaderFields().keySet()){
+//							String value = connection.getHeaderField(header);
+//							log.info("<< "+ header + ": " + value);
+//							if (header != null) {
+//								response.setHeader(header, value);
+//							}
+//						}
+//						response.setStatus(connection.getResponseCode());
+						//response.flushBuffer();
+						if (connection.getContentLength() > 0){
+							is = connection.getInputStream();
+							
+							byte[] buffer = new byte[4096];
+						    boolean started = false;
+						    long target = workWith.end;
+						    while ((length = is.read(buffer)) > 0 && workWith.position < target + 1) {
+						    	if (!started) {
+						    		log.info("  Content download started ["+id+"]...");
+						    		started = true;
+						    	}
+						    	fos.write(buffer, 0, length);
+						    	fos.flush();
+						    	workWith.position += length;
+					    		ros.write(buffer, 0, length);
+						    }
+						    log.info("  Content download finished ["+id+"].");
+						}
+					} catch (ClientAbortException e){
+						log.error("  Aborted by the client when writing "+length+" bytes. From "+ (workWith.position - length) +" to final position " + workWith.position);
+						abort = true;
+					} catch (Exception e){
+						log.error("  Unexpected error at position " + workWith.getPosition()+ ": " + e.getMessage(), e);
+					} finally {
+						workWith.finalEnd = workWith.position - 1;
+						if (workWith.start > workWith.finalEnd) {
+							workWith.status = ItemPart.STATUS_INVALID;
+						} else {
+							workWith.status = ItemPart.STATUS_FINISHED;
+							lowerByte = workWith.position;
+							synchronized (workWith.file) {
+								if (workWith.end != workWith.finalEnd) {
+									File nFile = new File(BASE_DIR, id +"."+workWith.start+"-"+workWith.finalEnd);
+									if (workWith.file.renameTo(nFile)){
+										workWith.file = nFile;
+									}
+								}
+							}
+						}
+						if (fos != null) {
+							fos.close();
+						}
+						if (is != null) {
+							is.close();
+						}
+						
+					}
+				} else {
+					while (lowerByte <= workWith.finalEnd && lowerByte <= upperByte && !abort) {
+						long startPosition = lowerByte - workWith.start;
+						long neededSize = upperByte - lowerByte + 1;
+						long maxExpectedSize =  workWith.finalEnd - workWith.start + 1;
+						long readSize = Math.min(neededSize, maxExpectedSize);
+						log.info("  Reading "+readSize+" cached bytes. ["+startPosition+" -> "+(startPosition+readSize-1)+"]. Available bytes: " + workWith.file.length());
+						while (workWith.file.length() <= startPosition && workWith.status == ItemPart.STATUS_STARTED){
+							log.info("    Waiting for file data...");
+							try {
+								Thread.sleep(200);
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
+						}
+						if (workWith.file.length() > startPosition){
+							RandomAccessFile aFile = null;
+							int length = 0;
+							try {
+								ByteBuffer buffer = ByteBuffer.allocate(4096);
+								aFile = new RandomAccessFile(workWith.file, "r");
+								FileChannel fc = aFile.getChannel();
+								fc.position(startPosition);
+								while ((length = fc.read(buffer)) > 0) {
+									if (lowerByte+length-1 > upperByte) {
+										length = (int) (upperByte-lowerByte+1);
+									}
+									ros.write(buffer.array(), 0, length);
+									lowerByte += length;
+									buffer.clear();
+								}
+							} catch (ClientAbortException e){
+								log.error("  Aborted by the client when writing "+length+" bytes. From "+ lowerByte+ " to " + (lowerByte+length-1));
+								abort = true;
+							} catch (Exception e){
+								log.error("  Unexpected error at position " + lowerByte+ ": " + e.getMessage(), e);
+							} finally {
+								if (aFile != null) {
+									aFile.close();
+								}
+							}
+						}
+					}
+					log.info("  Done reading from cached file.");
+				}
+			}
+		}
+	}
+	
+	private static class Item {
+		private boolean completed;
+		private Date expirationTime;
+		private TreeSet<ItemPart> parts;
+		private long size;
+		
+		public Date getExpirationTime() { return expirationTime; }
+		public void setExpirationTime(Date expirationTime) { this.expirationTime = expirationTime; }
+		public TreeSet<ItemPart> getParts() { return parts; }
+		public void setParts(TreeSet<ItemPart> parts) { this.parts = parts; }
+		public boolean isCompleted() { return completed; }
+		public void setCompleted(boolean completed) { this.completed = completed; }
+		public long getSize() { return size; }
+		public void setSize(long size) { this.size = size; }
+	}
+	
+	private static class ItemPart implements Comparable{
+		public static final byte STATUS_FINISHED = 0;
+		public static final byte STATUS_STARTED = 1;
+		public static final byte STATUS_CREATED = 2;
+		public static final byte STATUS_INVALID = 3;
+		private byte status;
+		private Long start;
+		private Long end;
+		private Long finalEnd;
+		private Long position;
+		private File file;
+		private Thread owner;
+		private long startTime;
+		
+		public ItemPart(){}
+		
+		public byte getStatus() { return status; }
+		public void setStatus(byte status) { this.status = status; }
+		public Long getStart() { return start; }
+		public void setStart(Long start) { this.start = start; }
+		public Long getEnd() {return end; }
+		public void setEnd(Long end) { this.end = end; }
+		public Long getPosition() { return position; }
+		public void setPosition(Long position) { this.position = position; }
+		public File getFile() { return file; }
+		public void setFile(File file) { this.file = file; }
+		public Thread getOwner() { return owner; }
+		public void setOwner(Thread owner) { this.owner = owner; }
+		public Long getFinalEnd() { return finalEnd; }
+		public void setFinalEnd(Long finalEnd) { this.finalEnd = finalEnd; }
+		public long getStartTime() { return startTime; }
+		public void setStartTime(long startTime) { this.startTime = startTime; }
+		@Override
+		public int compareTo(Object o) {
+			return start.compareTo(((ItemPart) o).getStart());
+		}
+		
+	}
+}

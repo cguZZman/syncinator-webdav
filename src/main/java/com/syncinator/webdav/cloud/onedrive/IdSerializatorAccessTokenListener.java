@@ -4,6 +4,7 @@ import java.io.File;
 
 import com.onedrive.api.OneDrive;
 import com.onedrive.api.support.SerializatorAccessTokenListener;
+import com.syncinator.webdav.SyncinatorWebdavApplication;
 
 public class IdSerializatorAccessTokenListener extends SerializatorAccessTokenListener {
 	private String id;
@@ -17,7 +18,6 @@ public class IdSerializatorAccessTokenListener extends SerializatorAccessTokenLi
 	}
 	
 	public String getApplicationFolder(){
-		return System.getProperty("user.home", EMPTY_STRING) + File.separator 
-				+ ".syncinator" + File.separator + "provider" + File.separator + "onedrive";
+		return SyncinatorWebdavApplication.APP_BASE_DIR + File.separator + "provider" + File.separator + "onedrive";
 	}
 }

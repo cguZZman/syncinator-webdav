@@ -2,10 +2,9 @@ package com.syncinator.webdav.cloud.onedrive;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -26,6 +25,7 @@ import com.onedrive.api.resource.Item;
 import com.onedrive.api.resource.support.ItemCollection;
 import com.onedrive.api.resource.support.ItemReference;
 import com.onedrive.api.resource.support.UploadSession;
+import com.syncinator.webdav.server.DownloadManager;
 import com.syncinator.webdav.server.SyncinatorDavResource;
 
 public class OneDriveDavResource extends SyncinatorDavResource {
@@ -33,7 +33,6 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	private OneDrive onedrive;
 	private ItemRequest itemRequest;
     private Item item;
-	
 	
 	public OneDriveDavResource(DavResourceLocator locator, ResourceConfig config, DavServletRequest request, DavServletResponse response) throws DavException {
 		this(locator, null, config, request, response);
@@ -105,46 +104,13 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	
 	@Override
 	public void download(OutputContext context) throws IOException {
-		InputStream is = null;
-		long downloaded = 0;
-		try {
-			log.info(item.getDownloadUrl());
-			HttpURLConnection connection = (HttpURLConnection) new URL(item.getDownloadUrl()).openConnection();
-			for (Enumeration<String> e = request.getHeaderNames(); e.hasMoreElements();){
-				String header = e.nextElement();
-				if (!header.equals("Host")){
-					connection.setRequestProperty(header, request.getHeader(header));
-				}
-			}
-			for (String header: connection.getHeaderFields().keySet()){
-				String value = connection.getHeaderField(header);
-				log.info("<< "+ header + ": " + value);
-				if (header != null) {
-					response.setHeader(header, value);
-				}
-			}
-			response.setStatus(connection.getResponseCode());
-			is = new URL(item.getDownloadUrl()).openStream();
-			OutputStream os = context.getOutputStream();
-			byte[] buffer = new byte[4096];
-		    int length;
-		    boolean started = false;
-		    while ((length = is.read(buffer)) > 0) {
-		    	downloaded += length;
-		    	if (!started) {
-		    		log.info("Starting download ["+getDisplayName()+"]...");
-		    		started = true;
-		    	}
-		        os.write(buffer, 0, length);
-		    }
-		    log.info("Download finished ["+getDisplayName()+"].");
-		} catch (Exception e){
-			log.error("Error at byte "+downloaded+ ": " + e.getMessage(), e);
-		} finally {
-			if (is != null) {
-				is.close();
-			}
-		}
+//		Map<String,String> headerMap = new HashMap<String,String>();
+//		for (Enumeration<String> e = request.getHeaderNames(); e.hasMoreElements();){
+//			String header = e.nextElement();
+//			headerMap.put(header.toLowerCase(), request.getHeader(header));
+//		}
+		log.info("File ["+getDisplayName()+"] requested...");
+		DownloadManager.download(item.getId(), item.getSize(), item.getDownloadUrl(), request.getHeader("range"), context);
 	}
 	
 	

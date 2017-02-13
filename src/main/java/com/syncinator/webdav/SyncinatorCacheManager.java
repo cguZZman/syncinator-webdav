@@ -26,7 +26,7 @@ public class SyncinatorCacheManager {
 			.withCache(RESOURCE_ALIAS, 
 					CacheConfigurationBuilder
 						.newCacheConfigurationBuilder(String.class, SyncinatorDavResource.class, ResourcePoolsBuilder.heap(50000))
-						.withExpiry(Expirations.timeToLiveExpiration(Duration.of(5, TimeUnit.SECONDS))))
+						.withExpiry(Expirations.timeToLiveExpiration(Duration.of(15, TimeUnit.SECONDS))))
 //			.withCache(NOT_FOUND_ALIAS, 
 //					CacheConfigurationBuilder
 //						.newCacheConfigurationBuilder(String.class, Object.class, ResourcePoolsBuilder.heap(1000))
@@ -34,7 +34,7 @@ public class SyncinatorCacheManager {
 			.build();
 	
 	private static PersistentCacheManager persistentCacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-			.with(CacheManagerBuilder.persistence(System.getProperty("user.home", "") + File.separator + ".syncinator" + File.separator + "file_cache.dat")) 
+			.with(CacheManagerBuilder.persistence(SyncinatorWebdavApplication.APP_BASE_DIR + File.separator + "file_cache.dat")) 
 			.withCache(CONTENT_ALIAS, 
 					CacheConfigurationBuilder
 						.newCacheConfigurationBuilder(String.class, Byte[].class, 

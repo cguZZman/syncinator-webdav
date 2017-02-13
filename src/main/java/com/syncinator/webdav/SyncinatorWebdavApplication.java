@@ -15,6 +15,8 @@ import com.syncinator.webdav.server.SyncinatorWebdavServlet;
 @SpringBootApplication
 public class SyncinatorWebdavApplication {
 
+	public static final String APP_BASE_DIR = System.getProperty("user.home", "") + File.separator + ".syncinator"; 
+	
 	public static void main(String[] args) {
 		SpringApplication.run(SyncinatorWebdavApplication.class, args);
 	}
