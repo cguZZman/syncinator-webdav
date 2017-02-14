@@ -89,10 +89,13 @@ public abstract class SyncinatorDavResource implements DavResource {
 	        } else {
 	        	localAccountId = path.substring(ipos, rpos);
 	            resourcePath = path.substring(rpos);
+	            if (resourcePath != null && resourcePath.charAt(resourcePath.length()-1) == 60656) {
+	            	throw new DavException(HttpServletResponse.SC_NOT_FOUND);
+	            }
 	        }
 		}
 		if (localAccountId == null){
-			throw new DavException(HttpServletResponse.SC_FORBIDDEN);
+			throw new DavException(HttpServletResponse.SC_NOT_FOUND);
 		}
 		resourceCache = SyncinatorCacheManager.getResourceCache();
 	}
