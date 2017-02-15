@@ -31,6 +31,7 @@ import org.apache.jackrabbit.webdav.lock.SupportedLock;
 import org.apache.jackrabbit.webdav.lock.Type;
 import org.apache.jackrabbit.webdav.property.DavProperty;
 import org.apache.jackrabbit.webdav.property.DavPropertyName;
+import org.apache.jackrabbit.webdav.property.DavPropertyNameSet;
 import org.apache.jackrabbit.webdav.property.DavPropertySet;
 import org.apache.jackrabbit.webdav.property.DefaultDavProperty;
 import org.apache.jackrabbit.webdav.property.PropEntry;
@@ -70,7 +71,8 @@ public abstract class SyncinatorDavResource implements DavResource {
 	public static final DavPropertyName ISFOLDER = DavPropertyName.create("isFolder");
 	public static final DavPropertyName ISHIDDEN = DavPropertyName.create("ishidden");
 	
-	public static final String METHODS = DavResource.METHODS + ", " + BindConstants.METHODS;
+	public static final String METHODS = "OPTIONS, GET, HEAD, POST, TRACE, PROPFIND, PROPPATCH, MKCOL, COPY, PUT, DELETE, MOVE";
+	//public static final String METHODS = DavResource.METHODS + ", " + BindConstants.METHODS;
     public static final String COMPLIANCE_CLASSES = DavCompliance.concatComplianceClasses(new String[] { DavCompliance._1_, DavCompliance._2_, DavCompliance._3_, DavCompliance.BIND });
     
     private Cache<String, SyncinatorDavResource> resourceCache;
@@ -102,7 +104,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 
 	protected abstract void fetchResource() throws Exception;
 	protected abstract void fetchChildren() throws Exception;
-	protected abstract void download(OutputContext context) throws IOException;
+	protected abstract void download(OutputContext context) throws IOException, DavException;
 
 	@Override
 	public DavResourceIterator getMembers() {
@@ -134,6 +136,8 @@ public abstract class SyncinatorDavResource implements DavResource {
 			propsInitialized = true;
 			try {
 				fetchResource();
+			} catch (DavException e) {
+				return;
 			} catch(Exception e){
 				propsInitialized = false;
 				log.error(e.getMessage() + " - [" + getResourcePath() + "]");
@@ -188,7 +192,15 @@ public abstract class SyncinatorDavResource implements DavResource {
 			outputContext.setModificationTime(modificationTime);
 			outputContext.setETag(eTag);
 			if (outputContext.getOutputStream() != null) {
-				download(outputContext);
+				try {
+					download(outputContext);
+				} catch (DavException e) {
+					if (!response.isCommitted()) {
+						response.sendError(e.getErrorCode());
+					}
+				}
+			} else {
+				response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 			}
 		}
 		
@@ -258,7 +270,11 @@ public abstract class SyncinatorDavResource implements DavResource {
 	@Override
 	public MultiStatusResponse alterProperties(List<? extends PropEntry> changeList) throws DavException {
 		log.info("*** alterProperties NOT IMPLEMENTED!");
-		return null;
+		for (PropEntry e : changeList) {
+			DefaultDavProperty p = (DefaultDavProperty)e;
+			log.info(p.getName() + ": " + p.getValue() );
+		}
+		return new MultiStatusResponse(this, new DavPropertyNameSet());
 	}
 
 	@Override
@@ -282,7 +298,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 	@Override
 	public ActiveLock[] getLocks() {
 		log.info("*** getLocks NOT IMPLEMENTED!");
-		return null;
+		return new ActiveLock[0];
 	}
 
 	@Override

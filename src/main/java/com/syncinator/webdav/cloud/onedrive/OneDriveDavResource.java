@@ -2,9 +2,6 @@ package com.syncinator.webdav.cloud.onedrive;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -20,6 +17,7 @@ import org.apache.jackrabbit.webdav.simple.ResourceConfig;
 import org.springframework.util.StringUtils;
 
 import com.onedrive.api.OneDrive;
+import com.onedrive.api.exception.OneDriveRequestException;
 import com.onedrive.api.request.ItemRequest;
 import com.onedrive.api.resource.Item;
 import com.onedrive.api.resource.support.ItemCollection;
@@ -53,9 +51,13 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	}
 	
 	@Override
-	protected void fetchResource() {
+	protected void fetchResource() throws DavException {
 		if (item == null) {
-			item = itemRequest.fetch();
+			try {
+				item = itemRequest.fetch();
+			} catch (OneDriveRequestException e) {
+				throw new DavException(e.getStatus().value());
+			}
 		}
 		if (item != null){
 			if (!StringUtils.isEmpty(item.getWebDavUrl())){
@@ -103,7 +105,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	}
 	
 	@Override
-	public void download(OutputContext context) throws IOException {
+	public void download(OutputContext context) throws IOException, DavException {
 //		Map<String,String> headerMap = new HashMap<String,String>();
 //		for (Enumeration<String> e = request.getHeaderNames(); e.hasMoreElements();){
 //			String header = e.nextElement();

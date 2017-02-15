@@ -21,6 +21,7 @@ import java.util.TreeSet;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.connector.ClientAbortException;
+import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,7 +96,7 @@ public class DownloadManager {
 //		item.parts.add(part);
 //		itemMap.put("C899E30C041941B5!197547", item);
 //	}
-	public static void download(String id, long size, String url, String requestedRange, OutputContext context) throws IOException {
+	public static void download(String id, long size, String url, String requestedRange, OutputContext context) throws IOException, DavException {
 		Item item = null;
 		List<Long[]> ranges = getRequestRangers(requestedRange, size);
 		synchronized (itemMap) {
@@ -112,6 +113,9 @@ public class DownloadManager {
 			totalNeededSize += range[1] - range[0] + 1;
 		}
 		context.setContentLength(totalNeededSize);
+		if (totalNeededSize != size) {
+			log.info("Partial content requested from client: " + requestedRange);
+		}
 		OutputStream ros = context.getOutputStream();
 		boolean abort = false;
 		for (int i=0; i<ranges.size() && !abort; i++) {
@@ -129,7 +133,7 @@ public class DownloadManager {
 						if (part.status == ItemPart.STATUS_INVALID) {
 							continue;
 						}
-						log.info("  Testing [" + part.start + " -> " + part.finalEnd + " | " + part.position + "]");
+						log.info("    Testing [" + part.start + " -> " + part.finalEnd + " | " + part.position + "]");
 						if (lowerByte == part.start){
 							workWith = part;
 							break;
@@ -146,7 +150,7 @@ public class DownloadManager {
 						}
 					}
 					if (workWith != null) {
-						log.info("\tFound!");
+						log.info("\t\tFound!");
 					}
 					if (workWith == null && stopPart == null && iterator.hasNext()) {
 						ItemPart part = iterator.next();
@@ -158,13 +162,12 @@ public class DownloadManager {
 					}
 					if (workWith == null) {
 						workWith = createPart(id, new Long[]{lowerByte, stopPart!=null?stopPart.start:upperByte});
-						log.info("  Creating new part [" + workWith.start + " -> " + workWith.finalEnd + "]");
 						item.parts.add(workWith);
+						log.info("  New part created [" + workWith.start + " -> " + workWith.finalEnd + "]");
 					}
 				}
 				
 				if (workWith.owner == Thread.currentThread() && workWith.status == ItemPart.STATUS_CREATED) {
-					log.info("  Downloading from cloud drive...");
 					FileOutputStream fos = null;
 					InputStream is = null;
 					int length=0;
@@ -181,9 +184,9 @@ public class DownloadManager {
 						if (lowerByte > 0 || upperByte < size-1) {
 							String rangeHeader = "bytes=" + lowerByte + "-" + upperByte;
 							connection.setRequestProperty("range", rangeHeader);
-							log.info("  Requesting partial file: " + rangeHeader);
+							log.info("  Downloading partial file from cloud: " + rangeHeader);
 						} else {
-							log.info("  Requesting complete file");
+							log.info("  Downloading complete file from cloud");
 						}
 //						for (String header: connection.getHeaderFields().keySet()){
 //							String value = connection.getHeaderField(header);
@@ -194,7 +197,7 @@ public class DownloadManager {
 //						}
 //						response.setStatus(connection.getResponseCode());
 						//response.flushBuffer();
-						if (connection.getContentLength() > 0){
+						if (connection.getContentLengthLong() != 0){
 							is = connection.getInputStream();
 							
 							byte[] buffer = new byte[4096];
@@ -202,7 +205,7 @@ public class DownloadManager {
 						    long target = workWith.end;
 						    while ((length = is.read(buffer)) > 0 && workWith.position < target + 1) {
 						    	if (!started) {
-						    		log.info("  Content download started ["+id+"]...");
+						    		log.info("  Remote streaming started ["+id+"]...");
 						    		started = true;
 						    	}
 						    	fos.write(buffer, 0, length);
@@ -210,13 +213,20 @@ public class DownloadManager {
 						    	workWith.position += length;
 					    		ros.write(buffer, 0, length);
 						    }
-						    log.info("  Content download finished ["+id+"].");
+						    log.info("  Remote streaming finished ["+id+"]");
+						} else {
+							log.error("  Contente length is 0! ["+id+"]");
+							throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 						}
 					} catch (ClientAbortException e){
 						log.error("  Aborted by the client when writing "+length+" bytes. From "+ (workWith.position - length) +" to final position " + workWith.position);
 						abort = true;
+						throw new DavException(HttpServletResponse.SC_OK);
+					} catch (DavException e){
+						throw e;
 					} catch (Exception e){
 						log.error("  Unexpected error at position " + workWith.getPosition()+ ": " + e.getMessage(), e);
+						throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 					} finally {
 						workWith.finalEnd = workWith.position - 1;
 						if (workWith.start > workWith.finalEnd) {
@@ -239,7 +249,6 @@ public class DownloadManager {
 						if (is != null) {
 							is.close();
 						}
-						
 					}
 				} else {
 					while (lowerByte <= workWith.finalEnd && lowerByte <= upperByte && !abort) {
@@ -275,9 +284,10 @@ public class DownloadManager {
 							} catch (ClientAbortException e){
 								log.error("  Aborted by the client when writing "+length+" bytes. From "+ lowerByte+ " to " + (lowerByte+length-1));
 								abort = true;
+								throw new DavException(HttpServletResponse.SC_OK);
 							} catch (Exception e){
 								log.error("  Unexpected error at position " + lowerByte+ ": " + e.getMessage(), e);
-								abort = true;
+								throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 							} finally {
 								if (aFile != null) {
 									aFile.close();
