@@ -18,8 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
-import javax.servlet.http.HttpServletResponse;
-
 import org.apache.catalina.connector.ClientAbortException;
 import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.io.OutputContext;
@@ -86,16 +84,18 @@ public class DownloadManager {
 		part.setFile(new File(BASE_DIR, id +"."+range[0]+"-"+range[1]));
 		return part;
 	}
-//	static {
-//		Item item = new Item();
-//		item.setSize(size);
-//		item.parts = new TreeSet<ItemPart>();
-//		ItemPart part = createPart("C899E30C041941B5!197547", new Long[]{0L, 5824639L});
-//		part.setStatus(ItemPart.STATUS_FINISHED);
-//		part.setPosition(part.getEnd()+1);
-//		item.parts.add(part);
-//		itemMap.put("C899E30C041941B5!197547", item);
-//	}
+	static {
+		String id = "C899E30C041941B5!204013";
+		Item item = new Item();
+		item.setSize(100073472L);
+		item.parts = new TreeSet<ItemPart>();
+		ItemPart part = createPart(id, new Long[]{0L, 100073471L});
+		part.setStatus(ItemPart.STATUS_FINISHED);
+		part.setPosition(part.getEnd()+1);
+		part.setFile(new File("/home/carlos/Downloads/Dragon Ball S01E01 - El secreto de la esfera del dragón.avi"));
+		item.parts.add(part);
+		itemMap.put(id, item);
+	}
 	public static void download(String id, long size, String url, String requestedRange, OutputContext context) throws IOException, DavException {
 		Item item = null;
 		List<Long[]> ranges = getRequestRangers(requestedRange, size);
@@ -181,10 +181,12 @@ public class DownloadManager {
 //								connection.setRequestProperty(e.getKey(), e.getValue());
 //							}
 //						}
+						boolean isPartial = false;
 						if (lowerByte > 0 || upperByte < size-1) {
-							String rangeHeader = "bytes=" + lowerByte + "-" + upperByte;
+							String rangeHeader = "bytes=" + lowerByte + "-" + (upperByte==size-1?"":upperByte);
 							connection.setRequestProperty("range", rangeHeader);
 							log.info("  Downloading partial file from cloud: " + rangeHeader);
+							isPartial = true;
 						} else {
 							log.info("  Downloading complete file from cloud");
 						}
@@ -201,32 +203,34 @@ public class DownloadManager {
 							is = connection.getInputStream();
 							
 							byte[] buffer = new byte[4096];
-						    boolean started = false;
+						    long downloaded = 0;
 						    long target = workWith.end;
 						    while ((length = is.read(buffer)) > 0 && workWith.position < target + 1) {
-						    	if (!started) {
+						    	if (downloaded == 0) {
 						    		log.info("  Remote streaming started ["+id+"]...");
-						    		started = true;
 						    	}
+						    	downloaded += length;
 						    	fos.write(buffer, 0, length);
 						    	fos.flush();
 						    	workWith.position += length;
 					    		ros.write(buffer, 0, length);
 						    }
-						    log.info("  Remote streaming finished ["+id+"]");
+						    log.info("  Remote streaming finished ["+id+"]. " + downloaded + " bytes downloaded.");
 						} else {
 							log.error("  Contente length is 0! ["+id+"]");
-							throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
+							abort = true;
+							//throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 						}
 					} catch (ClientAbortException e){
 						log.error("  Aborted by the client when writing "+length+" bytes. From "+ (workWith.position - length) +" to final position " + workWith.position);
 						abort = true;
-						throw new DavException(HttpServletResponse.SC_OK);
-					} catch (DavException e){
-						throw e;
+						//throw new DavException(HttpServletResponse.SC_OK);
+//					} catch (DavException e){
+//						throw e;
 					} catch (Exception e){
 						log.error("  Unexpected error at position " + workWith.getPosition()+ ": " + e.getMessage(), e);
-						throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
+						abort = true;
+						//throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 					} finally {
 						workWith.finalEnd = workWith.position - 1;
 						if (workWith.start > workWith.finalEnd) {
@@ -284,10 +288,11 @@ public class DownloadManager {
 							} catch (ClientAbortException e){
 								log.error("  Aborted by the client when writing "+length+" bytes. From "+ lowerByte+ " to " + (lowerByte+length-1));
 								abort = true;
-								throw new DavException(HttpServletResponse.SC_OK);
+								//throw new DavException(HttpServletResponse.SC_OK);
 							} catch (Exception e){
 								log.error("  Unexpected error at position " + lowerByte+ ": " + e.getMessage(), e);
-								throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
+								abort = true;
+								//throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 							} finally {
 								if (aFile != null) {
 									aFile.close();

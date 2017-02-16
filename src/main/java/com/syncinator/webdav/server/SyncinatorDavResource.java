@@ -198,7 +198,12 @@ public abstract class SyncinatorDavResource implements DavResource {
 					if (!response.isCommitted()) {
 						response.sendError(e.getErrorCode());
 					}
+				} catch (Exception e) {
+					if (!response.isCommitted()) {
+						response.sendError(HttpServletResponse.SC_BAD_GATEWAY);
+					}
 				}
+				
 			} else {
 				response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 			}
