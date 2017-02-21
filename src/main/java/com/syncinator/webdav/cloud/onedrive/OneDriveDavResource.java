@@ -112,7 +112,7 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 //			headerMap.put(header.toLowerCase(), request.getHeader(header));
 //		}
 		log.info("File ["+getDisplayName()+"] requested...");
-		DownloadManager.download(item.getId(), item.getSize(), item.getDownloadUrl(), request.getHeader("range"), context);
+		DownloadManager.download(item.getId(), item.getSize(), item.getDownloadUrl(), request.getHeader("range"), context, response);
 	}
 	
 	

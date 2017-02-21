@@ -36,13 +36,13 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
 //		if (!request.getMethod().equals(DavMethods.METHOD_PROPFIND) ){ //&& !request.getMethod().equals(DavMethods.METHOD_GET)){
-			log.info("+ " + request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
-			for (Enumeration<String> names = request.getHeaderNames(); names.hasMoreElements();){
-				String name = names.nextElement();
+//			log.info("+ " + request.getMethod()+": " + locator.getResourcePath() + ", deep: " + request.getDepth());
+//			for (Enumeration<String> names = request.getHeaderNames(); names.hasMoreElements();){
+//				String name = names.nextElement();
 //				if (name.equals("Range")) {
-					log.info("    "+ name + ": " + request.getHeader(name));
+//					log.info("    "+ name + ": " + request.getHeader(name));
 //				}
-			}
+//			}
 //		}
 		
 		String workspace = locator.getWorkspacePath();
