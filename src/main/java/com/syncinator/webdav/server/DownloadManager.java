@@ -80,21 +80,9 @@ public class DownloadManager {
 		part.setFile(new File(BASE_DIR, id +"."+range[0]+"-"+range[1]));
 		return part;
 	}
-//	static {
-//		String id = "C899E30C041941B5!204013";
-//		Item item = new Item();
-//		item.setSize(100073472L);
-//		item.parts = new TreeSet<ItemPart>();
-//		ItemPart part = createPart(id, new Long[]{0L, 100073471L});
-//		part.setStatus(ItemPart.STATUS_FINISHED);
-//		part.setPosition(part.getEnd()+1);
-//		part.setFile(new File("/home/carlos/Downloads/Dragon Ball S01E01 - El secreto de la esfera del dragón.avi"));
-//		item.parts.add(part);
-//		itemMap.put(id, item);
-//	}
+
 	public static void download(String id, long size, String url, String requestedRange, OutputContext context, HttpServletResponse response) throws IOException, DavException {
 		Item item = null;
-		List<Long[]> ranges = getRequestRangers(requestedRange, size);
 		synchronized (itemMap) {
 			item = itemMap.get(id);
 			if (item == null) {
@@ -104,10 +92,10 @@ public class DownloadManager {
 				itemMap.put(id, item);
 			}
 		}
-		
+		List<Long[]> ranges = getRequestRangers(requestedRange, size);
 		Long[] range = ranges.get(0); //Only one range supported from the request for now. Will add multipart/byteranges if needed.
 		long totalNeededSize = range[1] - range[0] + 1;
-		if (totalNeededSize != size) {
+		if (requestedRange != null) {
 			response.setStatus(206);
 			context.setProperty("Content-Range", "bytes " + range[0]+"-"+range[1]+"/"+size);
 			log.info("Partial content requested from client: " + requestedRange);
