@@ -151,9 +151,9 @@ public abstract class SyncinatorDavResource implements DavResource {
 			if (eTag != null){
 				properties.add(new DefaultDavProperty<String>(DavPropertyName.GETETAG, eTag));
 			}
-			
-	        if (getDisplayName() != null) {
-	            properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, getDisplayName()));
+			String displayName = getDisplayName();
+	        if (displayName != null) {
+	            properties.add(new DefaultDavProperty<String>(DavPropertyName.DISPLAYNAME, displayName));
 	        }
 	        if (isCollection()) {
 	            properties.add(new ResourceType(ResourceType.COLLECTION));
@@ -172,11 +172,11 @@ public abstract class SyncinatorDavResource implements DavResource {
 	        /* set current lock information. If no lock is set to this resource,
 	        an empty lock discovery will be returned in the response. */
 	        //properties.add(new LockDiscovery(getLock(Type.WRITE, Scope.EXCLUSIVE)));
-	        properties.add(new LockDiscovery());
+//	        properties.add(new LockDiscovery());
 	        /* lock support information: all locks are lockable. */
 	        SupportedLock supportedLock = new SupportedLock();
 	        supportedLock.addEntry(Type.WRITE, Scope.EXCLUSIVE);
-	        properties.add(supportedLock);
+//	        properties.add(supportedLock);
 		}
         
     }

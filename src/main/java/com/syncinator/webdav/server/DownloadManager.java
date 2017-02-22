@@ -16,12 +16,12 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TreeSet;
 
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.connector.ClientAbortException;
-import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +30,7 @@ import com.syncinator.webdav.SyncinatorWebdavApplication;
 
 public class DownloadManager {
 	private static Logger log = LoggerFactory.getLogger(DownloadManager.class);
-	private static final String BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "downloads";
+	private static final String BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "download_cache";
 	private static Map<String, Item> itemMap = new HashMap<String, Item>();
 	
 	static {
@@ -81,8 +81,13 @@ public class DownloadManager {
 		return part;
 	}
 
-	public static void download(String id, long size, String url, String requestedRange, OutputContext context, HttpServletResponse response) throws IOException, DavException {
+	public static void download(SyncinatorDavResource resource, String url, OutputContext context) throws IOException {
 		Item item = null;
+		String id = resource.getLocator().getResourcePath().replace('/', '-');
+		long size = resource.size;
+		HttpServletResponse response = resource.response;
+		String requestedRange = resource.request.getHeader("range");
+		
 		synchronized (itemMap) {
 			item = itemMap.get(id);
 			if (item == null) {
@@ -168,7 +173,9 @@ public class DownloadManager {
 					} else {
 						log.info("  Downloading complete file from cloud");
 					}
-					if (connection.getContentLengthLong() != 0){
+					int responseCode = connection.getResponseCode();
+					if (responseCode < 400 && connection.getContentLengthLong() != 0){
+						log.info("  Content Length is " + connection.getContentLengthLong());
 						is = connection.getInputStream();
 						boolean abortedByClient = false;
 						byte[] buffer = new byte[4096];
@@ -194,7 +201,11 @@ public class DownloadManager {
 					    }
 					    log.info("  Remote streaming finished ["+id+"]. " + downloaded + " bytes downloaded.");
 					} else {
-						log.error("  Contente length is 0! ["+id+"]");
+						response.setStatus(responseCode);
+						log.error("  An error happened! ["+id+"]");
+						for (Entry<String,List<String>> e : connection.getHeaderFields().entrySet()) {
+							log.error("   << " + e.getKey() + ": " + e.getValue());
+						}
 						abort = true;
 						//throw new DavException(HttpServletResponse.SC_BAD_GATEWAY);
 					}

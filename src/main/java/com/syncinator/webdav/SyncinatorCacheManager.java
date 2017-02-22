@@ -34,7 +34,7 @@ public class SyncinatorCacheManager {
 			.build();
 	
 	private static PersistentCacheManager persistentCacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-			.with(CacheManagerBuilder.persistence(SyncinatorWebdavApplication.APP_BASE_DIR + File.separator + "file_cache.dat")) 
+			.with(CacheManagerBuilder.persistence(SyncinatorWebdavApplication.APP_BASE_DIR + File.separator + "file_cache")) 
 			.withCache(CONTENT_ALIAS, 
 					CacheConfigurationBuilder
 						.newCacheConfigurationBuilder(String.class, Byte[].class, 
