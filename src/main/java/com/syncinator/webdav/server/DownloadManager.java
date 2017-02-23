@@ -21,8 +21,8 @@ import java.util.TreeSet;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.connector.ClientAbortException;
+import org.apache.jackrabbit.webdav.DavConstants;
 import org.apache.jackrabbit.webdav.DavException;
-import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +31,7 @@ import com.syncinator.webdav.SyncinatorWebdavApplication;
 public class DownloadManager {
 	private static Logger log = LoggerFactory.getLogger(DownloadManager.class);
 	private static final String BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "download_cache";
-	private static Map<String, Item> itemMap = new HashMap<String, Item>();
+	private static Map<String, DownloadItem> itemMap = new HashMap<String, DownloadItem>();
 	
 	static {
 		File baseDir = new File(BASE_DIR);
@@ -41,60 +41,67 @@ public class DownloadManager {
 		}
 	}
 	
-	private static List<long[]> getRangeList(String ranges, long maxLastByte){
+	private static List<long[]> getRangeList(String ranges, long maxLastByte) throws DavException{
 		List<long[]> list = new ArrayList<>();
-		if (ranges == null){
-			list.add(new long[]{0L,maxLastByte});
-		} else {
-			for (String range : ranges.split("\\=")[1].split(",")){
-				int index = range.indexOf('-');
-				long firstByte = 0;
-				long lastByte = maxLastByte;
-				if (index > 0) {
-					firstByte = Long.parseLong(range.substring(0, index));
+		try {
+			if (ranges == null){
+				list.add(new long[]{0L,maxLastByte});
+			} else {
+				for (String range : ranges.split("\\=")[1].split(",")){
+					int index = range.indexOf('-');
+					long firstByte = index > 0 ? Long.parseLong(range.substring(0, index)) : 0;
+					long lastByte = index < range.length() - 1 ? Math.min(maxLastByte, Long.parseLong(range.substring(index+1))) : maxLastByte;
+					if (index == 0) {
+						firstByte = maxLastByte - lastByte + 1;
+						lastByte = maxLastByte;
+					}
+					if (firstByte > maxLastByte) {
+						throw new DavException(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+					}
+					list.add(new long[]{firstByte, lastByte});
 				}
-				if (index < range.length() - 1) {
-					lastByte = Long.parseLong(range.substring(index+1));
-				}
-				if (index == 0) {
-					firstByte = maxLastByte - lastByte + 1;
-					lastByte = maxLastByte;
-				}
-				list.add(new long[]{firstByte, lastByte});
 			}
+		} catch (DavException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new DavException(HttpServletResponse.SC_BAD_REQUEST, e);
 		}
 		return list;
 	}
-	
-	private static ItemPart createPart(String id, Long[] range) {
-		ItemPart part = new ItemPart();
+	private static DownloadItem getDownloadItem(String id, long realSize) {
+		DownloadItem downloadItem = null;
+		synchronized (itemMap) {
+			downloadItem = itemMap.get(id);
+			if (downloadItem == null) {
+				downloadItem = new DownloadItem();
+				downloadItem.realSize = realSize;
+				downloadItem.parts = new TreeSet<DownloadItemPart>();
+				itemMap.put(id, downloadItem);
+			}
+		}
+		return downloadItem;
+	}
+	private static DownloadItemPart createPart(String id, Long[] range) {
+		DownloadItemPart part = new DownloadItemPart();
 		part.firstByte = range[0];
 		part.position = range[0];
 		part.lastByte = range[1];
 		part.owner = Thread.currentThread();
-		part.status = ItemPart.STATUS_CREATED;
+		part.status = DownloadItemPart.STATUS_CREATED;
 		part.file = new File(BASE_DIR, id +"."+range[0]+"-"+range[1]);
 		return part;
 	}
+	
+	
 
-	public static void download(SyncinatorDavResource resource, String url, OutputContext context) throws IOException, DavException {
-		String id = resource.getLocator().getResourcePath().replace('/', '-');
+	public static void download(SyncinatorDavResource resource, String url) throws IOException, DavException {
+		String id = resource.getLocator().getResourcePath().replace('/', '=');
 		HttpServletResponse response = resource.response;
 		String clientRangeHeader = resource.request.getHeader("range");
 		boolean clientRequestedPartialContent = clientRangeHeader != null;
 		boolean reponseInitialized = false;
-		Item item = null;
-		synchronized (itemMap) {
-			item = itemMap.get(id);
-			if (item == null) {
-				item = new Item();
-				item.realSize = resource.size;
-				item.parts = new TreeSet<ItemPart>();
-				itemMap.put(id, item);
-			}
-		}
-		
-		List<long[]> rangeList = getRangeList(clientRangeHeader, item.realSize - 1);
+		DownloadItem downloadItem = getDownloadItem(id, resource.size);
+		List<long[]> rangeList = getRangeList(clientRangeHeader, downloadItem.realSize - 1);
 		long[] requestedRange = rangeList.get(0); //Only one range supported from the request for now. Will add multipart/byteranges if needed.
 		if (clientRequestedPartialContent) {
 			log.info("* Client has requested partial content: " + clientRangeHeader);
@@ -102,20 +109,18 @@ public class DownloadManager {
 		OutputStream clientOutputStream = response.getOutputStream();
 		boolean abort = false;
 		long lowerByte = requestedRange[0];
-		long upperByte = requestedRange[1];
-		
-		while (lowerByte <= upperByte && !abort){
-			log.info("+ Looking for [" + lowerByte + " -> " + upperByte + "]");
-			ItemPart workWith = null;
-			synchronized (item.parts) {
-				ItemPart stopPart = null;
-				Iterator<ItemPart> iterator = item.parts.iterator();
+		while (lowerByte <= requestedRange[1] && !abort){
+			log.info("+ Looking for [" + lowerByte + " -> " + requestedRange[1] + "]");
+			DownloadItemPart workWith = null;
+			synchronized (downloadItem.parts) {
+				DownloadItemPart stopPart = null;
+				Iterator<DownloadItemPart> iterator = downloadItem.parts.iterator();
 				while (iterator.hasNext()) {
-					ItemPart part = iterator.next();
-					if (part.status == ItemPart.STATUS_INVALID) {
+					DownloadItemPart part = iterator.next();
+					if (part.status == DownloadItemPart.STATUS_INVALID) {
 						continue;
 					}
-					//log.info("    Testing [" + part.start + " -> " + part.finalEnd + " | " + part.position + "]");
+					log.info("    Testing [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
 					if (lowerByte == part.firstByte){
 						workWith = part;
 						break;
@@ -135,31 +140,31 @@ public class DownloadManager {
 					log.info("    Found! [" + workWith.firstByte + " -> " + workWith.lastByte + " | " + workWith.position + "] (" + workWith.owner.getName() + ")");
 				}
 				if (workWith == null && stopPart == null && iterator.hasNext()) {
-					ItemPart part = iterator.next();
+					DownloadItemPart part = iterator.next();
 					log.info("  Testing stop [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
-					if (lowerByte < part.firstByte && part.firstByte < upperByte && (workWith == null || workWith.position < part.position)) {
+					if (lowerByte < part.firstByte && part.firstByte < requestedRange[1] && (workWith == null || workWith.position < part.position)) {
 						stopPart = part;
 						log.info("\tFound!");
 					}
 				}
 				if (workWith == null) {
-					workWith = createPart(id, new Long[]{lowerByte, stopPart!=null?stopPart.firstByte:upperByte});
-					item.parts.add(workWith);
+					workWith = createPart(id, new Long[]{lowerByte, stopPart != null ? stopPart.firstByte - 1 : requestedRange[1]});
+					downloadItem.parts.add(workWith);
 					log.info("  New part created [" + workWith.firstByte + " -> " + workWith.lastByte + "]");
 				}
 			}
 			
-			if (workWith.owner == Thread.currentThread() && workWith.status == ItemPart.STATUS_CREATED) {
+			if (workWith.owner == Thread.currentThread() && workWith.status == DownloadItemPart.STATUS_CREATED) {
 				FileOutputStream fos = null;
 				InputStream is = null;
 				int length=0;
 				try {
-					workWith.status = ItemPart.STATUS_STARTED;
+					workWith.status = DownloadItemPart.STATUS_STARTED;
 					fos = new FileOutputStream(workWith.file);
 					HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-					boolean partialContent = lowerByte > 0 || upperByte < item.realSize - 1; 
+					boolean partialContent = lowerByte > 0 || requestedRange[1] < downloadItem.realSize - 1; 
 					if (partialContent) {
-						String rangeHeader = "bytes=" + lowerByte + "-" + (upperByte==item.realSize - 1?"":upperByte);
+						String rangeHeader = "bytes=" + lowerByte + "-" + (workWith.lastByte==downloadItem.realSize - 1?"":workWith.lastByte);
 						connection.setRequestProperty("range", rangeHeader);
 						log.info("  Downloading partial file from drive cloud: " + rangeHeader);
 					} else {
@@ -169,19 +174,20 @@ public class DownloadManager {
 					if (responseCode < 400 && connection.getContentLengthLong() > 0){
 						if (!reponseInitialized) {
 							reponseInitialized = true;
-							item.realSize = connection.getContentLengthLong();
+							downloadItem.realSize = connection.getContentLengthLong();
 							if (partialContent) {
-								item.realSize = Long.parseLong(connection.getHeaderField("Content-Range").split("/")[1]);
+								downloadItem.realSize = Long.parseLong(connection.getHeaderField("Content-Range").split("/")[1]);
 							}
+							requestedRange[1] = Math.min(requestedRange[1], downloadItem.realSize - 1);
+							workWith.lastByte = Math.min(workWith.lastByte, downloadItem.realSize - 1);
 							if (clientRequestedPartialContent) {
 								response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
-								response.setHeader("Content-Range", "bytes " + requestedRange[0]+"-"+requestedRange[1]+"/"+item.realSize);
+								response.setHeader("Content-Range", "bytes " + requestedRange[0]+"-"+requestedRange[1]+"/"+downloadItem.realSize);
 							} else {
 								response.setStatus(HttpServletResponse.SC_OK);
 							}
 							response.setHeader("Accept-Ranges", "bytes");
-							requestedRange[1] = Math.min(requestedRange[1], item.realSize - 1);
-							workWith.lastByte = Math.min(workWith.lastByte, item.realSize - 1);
+							response.addHeader(DavConstants.HEADER_CONTENT_LENGTH, Long.toString(requestedRange[1] - requestedRange[0] + 1));
 						}
 						
 						is = connection.getInputStream();
@@ -194,16 +200,16 @@ public class DownloadManager {
 					    	}
 					    	downloaded += length;
 					    	fos.write(buffer, 0, length);
-					    	fos.flush();
 					    	workWith.position += length;
 					    	if (!abortedByClient) {
-					    		try {
+//					    		try {
 					    			clientOutputStream.write(buffer, 0, length);
-					    		} catch (ClientAbortException e) {
-					    			workWith.lastByte = Math.min(workWith.lastByte, workWith.position+5242880);
-					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
-					    			abortedByClient = true;
-					    		}
+					    			clientOutputStream.flush();
+//					    		} catch (ClientAbortException e) {
+//					    			workWith.lastByte = Math.min(workWith.lastByte, workWith.position+5242880);
+//					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
+//					    			abortedByClient = true;
+//					    		}
 					    	}
 					    }
 					    log.info("  Remote streaming finished ["+id+"]. " + downloaded + " bytes downloaded.");
@@ -234,9 +240,9 @@ public class DownloadManager {
 				} finally {
 					workWith.lastByte = workWith.position - 1;
 					if (workWith.firstByte > workWith.lastByte) {
-						workWith.status = ItemPart.STATUS_INVALID;
+						workWith.status = DownloadItemPart.STATUS_INVALID;
 					} else {
-						workWith.status = ItemPart.STATUS_FINISHED;
+						workWith.status = DownloadItemPart.STATUS_FINISHED;
 						lowerByte = workWith.position;
 						synchronized (workWith.file) {
 							File nFile = new File(BASE_DIR, id +"."+workWith.firstByte+"-"+workWith.lastByte);
@@ -253,13 +259,11 @@ public class DownloadManager {
 					}
 				}
 			} else {
-				while (lowerByte <= workWith.lastByte && lowerByte <= upperByte && !abort) {
+				while (lowerByte <= workWith.lastByte && lowerByte <= requestedRange[1] && !abort) {
 					long startPosition = lowerByte - workWith.firstByte;
-					long neededSize = upperByte - lowerByte + 1;
-					long maxExpectedSize =  workWith.lastByte - workWith.firstByte + 1;
-					long readSize = Math.min(neededSize, maxExpectedSize);
-					log.info("  Reading "+readSize+" cached bytes. ["+startPosition+" -> "+(startPosition+readSize-1)+"]. Available bytes: " + workWith.file.length());
-					while (workWith.file.length() <= startPosition && workWith.status == ItemPart.STATUS_STARTED){
+					long neededSize = Math.min(requestedRange[1],workWith.lastByte) - lowerByte + 1;
+					log.info("  Reading "+neededSize+" bytes from file. ["+startPosition+" -> "+(startPosition+neededSize-1)+"]. Available bytes: " + workWith.file.length());
+					while (workWith.file.length() <= startPosition && workWith.status == DownloadItemPart.STATUS_STARTED){
 						log.info("    Waiting for file data...");
 						try {
 							Thread.sleep(200);
@@ -275,20 +279,24 @@ public class DownloadManager {
 								reponseInitialized = true;
 								if (clientRequestedPartialContent) {
 									response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
-									response.setHeader("Content-Range", "bytes " + requestedRange[0]+"-"+requestedRange[1]+"/"+item.realSize);
+									response.setHeader("Content-Range", "bytes " + requestedRange[0]+"-"+requestedRange[1]+"/"+downloadItem.realSize);
 								} else {
 									response.setStatus(HttpServletResponse.SC_OK);
 								}
 								response.setHeader("Accept-Ranges", "bytes");
+								response.addHeader(DavConstants.HEADER_CONTENT_LENGTH, Long.toString(requestedRange[1] - requestedRange[0] + 1));
 							}
 							
-							ByteBuffer buffer = ByteBuffer.allocate(4096);
+							ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(neededSize, 4096));
 							aFile = new RandomAccessFile(workWith.file, "r");
 							FileChannel fc = aFile.getChannel();
 							fc.position(startPosition);
 							while ((length = fc.read(buffer)) > 0) {
-								if (lowerByte+length-1 > upperByte) {
-									length = (int) (upperByte-lowerByte+1);
+								if (lowerByte+length-1 > requestedRange[1]) {
+									length = (int) (requestedRange[1]-lowerByte+1);
+									if (length == 0) {
+										break;
+									}
 								}
 								clientOutputStream.write(buffer.array(), 0, length);
 								lowerByte += length;
@@ -318,14 +326,14 @@ public class DownloadManager {
 		}
 	}
 	
-	private static class Item {
+	private static class DownloadItem {
 //		private boolean completed;
 //		private Date expirationTime;
 		private long realSize;
-		private TreeSet<ItemPart> parts;
+		private TreeSet<DownloadItemPart> parts;
 	}
 	
-	private static class ItemPart implements Comparable<ItemPart>{
+	private static class DownloadItemPart implements Comparable<DownloadItemPart>{
 		public static final byte STATUS_FINISHED = 0;
 		public static final byte STATUS_STARTED = 1;
 		public static final byte STATUS_CREATED = 2;
@@ -338,7 +346,7 @@ public class DownloadManager {
 		private Thread owner;
 		
 		@Override
-		public int compareTo(ItemPart o) {
+		public int compareTo(DownloadItemPart o) {
 			return this.firstByte.compareTo(o.firstByte);
 		}
 		
