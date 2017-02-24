@@ -89,6 +89,7 @@ public class DownloadManager {
 		part.owner = Thread.currentThread();
 		part.status = DownloadItemPart.STATUS_CREATED;
 		part.file = new File(BASE_DIR, id +"."+range[0]+"-"+range[1]);
+		part.expirationTime = System.currentTimeMillis() + 15000;
 		return part;
 	}
 	
@@ -204,7 +205,7 @@ public class DownloadManager {
 					    	if (!abortedByClient) {
 //					    		try {
 					    			clientOutputStream.write(buffer, 0, length);
-					    			clientOutputStream.flush();
+//					    			clientOutputStream.flush();
 //					    		} catch (ClientAbortException e) {
 //					    			workWith.lastByte = Math.min(workWith.lastByte, workWith.position+5242880);
 //					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
@@ -344,6 +345,7 @@ public class DownloadManager {
 		private Long position;
 		private File file;
 		private Thread owner;
+		private long expirationTime;
 		
 		@Override
 		public int compareTo(DownloadItemPart o) {
