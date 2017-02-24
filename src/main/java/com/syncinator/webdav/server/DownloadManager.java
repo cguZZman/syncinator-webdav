@@ -121,7 +121,7 @@ public class DownloadManager {
 					if (part.status == DownloadItemPart.STATUS_INVALID) {
 						continue;
 					}
-					log.info("    Testing [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
+//					log.info("    Testing [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
 					if (lowerByte == part.firstByte){
 						workWith = part;
 						break;
@@ -196,9 +196,9 @@ public class DownloadManager {
 						byte[] buffer = new byte[4096];
 					    long downloaded = 0;
 					    while ((length = is.read(buffer)) > 0 && workWith.position < workWith.lastByte + 1) {
-					    	if (downloaded == 0) {
-					    		log.info("  Remote streaming started ["+id+"]...");
-					    	}
+//					    	if (downloaded == 0) {
+//					    		log.info("  Remote streaming started ["+id+"]...");
+//					    	}
 					    	downloaded += length;
 					    	fos.write(buffer, 0, length);
 					    	workWith.position += length;
@@ -207,13 +207,16 @@ public class DownloadManager {
 					    			clientOutputStream.write(buffer, 0, length);
 //					    			clientOutputStream.flush();
 //					    		} catch (ClientAbortException e) {
-//					    			workWith.lastByte = Math.min(workWith.lastByte, workWith.position+5242880);
+//					    			workWith.lastByte = Math.min(workWith.lastByte, workWith.position+524288*2);
 //					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
 //					    			abortedByClient = true;
+//					    			abort = true;
 //					    		}
 					    	}
 					    }
-					    log.info("  Remote streaming finished ["+id+"]. " + downloaded + " bytes downloaded.");
+					    if (!abortedByClient) {
+					    	log.info("  Remote streaming finished ["+id+"]. " + downloaded + " bytes downloaded.");
+					    }
 					} else {
 						log.error("  An error happened! ["+id+"]");
 						for (Entry<String,List<String>> e : connection.getHeaderFields().entrySet()) {
