@@ -29,9 +29,11 @@ import org.slf4j.LoggerFactory;
 import com.syncinator.webdav.SyncinatorWebdavApplication;
 
 public class DownloadManager {
+	public static final long PART_IDLE_TIME = 10000;
 	private static Logger log = LoggerFactory.getLogger(DownloadManager.class);
 	private static final String BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "download_cache";
-	private static Map<String, DownloadItem> itemMap = new HashMap<String, DownloadItem>();
+	public static Map<String, DownloadItem> itemMap = new HashMap<String, DownloadItem>();
+	public static List<DownloadItemPart> unableToDelete = new ArrayList<DownloadItemPart>();
 	
 	static {
 		File baseDir = new File(BASE_DIR);
@@ -88,12 +90,21 @@ public class DownloadManager {
 		part.lastByte = range[1];
 		part.owner = Thread.currentThread();
 		part.status = DownloadItemPart.STATUS_CREATED;
-		part.file = new File(BASE_DIR, id +"."+range[0]+"-"+range[1]);
-		part.expirationTime = System.currentTimeMillis() + 15000;
+		part.id = id +"."+range[0]+"-"+range[1];
+		part.file = new File(BASE_DIR, part.id);
+		part.creationTime = System.currentTimeMillis();
+		part.expirationTime = part.creationTime + PART_IDLE_TIME;
 		return part;
 	}
 	
-	
+	private static void deleteFile(DownloadItemPart part){
+		if (!part.file.delete() && part.file.exists()){
+			synchronized (unableToDelete){
+				unableToDelete.add(part);
+			}
+		}
+			
+	}
 
 	public static void download(SyncinatorDavResource resource, String url) throws IOException, DavException {
 		String id = resource.getLocator().getResourcePath().replace('/', '=');
@@ -116,9 +127,15 @@ public class DownloadManager {
 			synchronized (downloadItem.parts) {
 				DownloadItemPart stopPart = null;
 				Iterator<DownloadItemPart> iterator = downloadItem.parts.iterator();
+				List<DownloadItemPart> expired = new ArrayList<DownloadItemPart>();
 				while (iterator.hasNext()) {
 					DownloadItemPart part = iterator.next();
 					if (part.status == DownloadItemPart.STATUS_INVALID) {
+						continue;
+					}
+					if (part.expirationTime < System.currentTimeMillis() && part.status != DownloadItemPart.STATUS_STARTED){
+						deleteFile(part);
+						expired.add(part);
 						continue;
 					}
 //					log.info("    Testing [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
@@ -136,6 +153,9 @@ public class DownloadManager {
 						stopPart = part;
 						break;
 					}
+				}
+				if (expired.size() > 0) {
+					downloadItem.parts.removeAll(expired);
 				}
 				if (workWith != null) {
 					log.info("    Found! [" + workWith.firstByte + " -> " + workWith.lastByte + " | " + workWith.position + "] (" + workWith.owner.getName() + ")");
@@ -180,7 +200,9 @@ public class DownloadManager {
 								downloadItem.realSize = Long.parseLong(connection.getHeaderField("Content-Range").split("/")[1]);
 							}
 							requestedRange[1] = Math.min(requestedRange[1], downloadItem.realSize - 1);
-							workWith.lastByte = Math.min(workWith.lastByte, downloadItem.realSize - 1);
+							synchronized (workWith) {
+								workWith.lastByte = Math.min(workWith.lastByte, downloadItem.realSize - 1);
+							}
 							if (clientRequestedPartialContent) {
 								response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
 								response.setHeader("Content-Range", "bytes " + requestedRange[0]+"-"+requestedRange[1]+"/"+downloadItem.realSize);
@@ -201,17 +223,21 @@ public class DownloadManager {
 //					    	}
 					    	downloaded += length;
 					    	fos.write(buffer, 0, length);
-					    	workWith.position += length;
+					    	synchronized (workWith) {
+					    		workWith.position += length;
+					    	}
 					    	if (!abortedByClient) {
-//					    		try {
+					    		try {
 					    			clientOutputStream.write(buffer, 0, length);
 //					    			clientOutputStream.flush();
-//					    		} catch (ClientAbortException e) {
-//					    			workWith.lastByte = Math.min(workWith.lastByte, workWith.position+524288*2);
-//					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
-//					    			abortedByClient = true;
-//					    			abort = true;
-//					    		}
+					    		} catch (ClientAbortException e) {
+					    			synchronized (workWith) {
+					    				workWith.lastByte = Math.min(workWith.lastByte, workWith.position+524288*2);
+					    			}
+					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
+					    			abortedByClient = true;
+					    			abort = true;
+					    		}
 					    	}
 					    }
 					    if (!abortedByClient) {
@@ -242,40 +268,66 @@ public class DownloadManager {
 					}
 					abort = true;
 				} finally {
-					workWith.lastByte = workWith.position - 1;
-					if (workWith.firstByte > workWith.lastByte) {
-						workWith.status = DownloadItemPart.STATUS_INVALID;
-					} else {
-						workWith.status = DownloadItemPart.STATUS_FINISHED;
-						lowerByte = workWith.position;
-						synchronized (workWith.file) {
-							File nFile = new File(BASE_DIR, id +"."+workWith.firstByte+"-"+workWith.lastByte);
-							if (!nFile.equals(workWith.file) && workWith.file.renameTo(nFile)){
-								workWith.file = nFile;
+					synchronized (downloadItem.parts) {
+						synchronized (workWith) {
+							workWith.lastByte = workWith.position - 1;
+							workWith.expirationTime = System.currentTimeMillis() + PART_IDLE_TIME;
+							if (workWith.firstByte > workWith.lastByte) {
+								workWith.status = DownloadItemPart.STATUS_INVALID;
+								synchronized (workWith.file) {
+									deleteFile(workWith);
+								}
+								downloadItem.parts.remove(workWith);
+							} else {
+								workWith.status = DownloadItemPart.STATUS_FINISHED;
+								lowerByte = workWith.position;
+								synchronized (workWith.file) {
+									File nFile = new File(BASE_DIR, id +"."+workWith.firstByte+"-"+workWith.lastByte);
+									if (!nFile.equals(workWith.file) && workWith.file.renameTo(nFile)){
+										workWith.file = nFile;
+									}
+								}
+							}
+							if (fos != null) {
+								fos.close();
+							}
+							if (is != null) {
+								is.close();
 							}
 						}
 					}
-					if (fos != null) {
-						fos.close();
-					}
-					if (is != null) {
-						is.close();
-					}
 				}
 			} else {
-				while (lowerByte <= workWith.lastByte && lowerByte <= requestedRange[1] && !abort) {
-					long startPosition = lowerByte - workWith.firstByte;
-					long neededSize = Math.min(requestedRange[1],workWith.lastByte) - lowerByte + 1;
-					log.info("  Reading "+neededSize+" bytes from file. ["+startPosition+" -> "+(startPosition+neededSize-1)+"]. Available bytes: " + workWith.file.length());
-					while (workWith.file.length() <= startPosition && workWith.status == DownloadItemPart.STATUS_STARTED){
+				long firstByte, lastByte, fileLength, status;
+				synchronized (workWith) {
+					firstByte = workWith.firstByte;
+					lastByte = workWith.lastByte;
+					status = workWith.status;
+					synchronized (workWith.file) {
+						fileLength = workWith.file.length();
+					}
+				}
+				while (lowerByte <= lastByte && lowerByte <= requestedRange[1] && !abort && status != DownloadItemPart.STATUS_INVALID) {
+					long startPosition = lowerByte - firstByte;
+					long neededSize = Math.min(requestedRange[1],lastByte) - lowerByte + 1;
+					log.info("  Reading "+neededSize+" bytes from file. ["+startPosition+" -> "+(startPosition+neededSize-1)+"]. Available bytes: " + fileLength);
+					while (fileLength <= startPosition && status == DownloadItemPart.STATUS_STARTED){
 						log.info("    Waiting for file data...");
 						try {
 							Thread.sleep(200);
 						} catch (InterruptedException e) {
 							e.printStackTrace();
+							abort = true;
+							break;
+						}
+						synchronized (workWith) {
+							status = workWith.status;
+							synchronized (workWith.file) {
+								fileLength = workWith.file.length();
+							}
 						}
 					}
-					if (workWith.file.length() > startPosition){
+					if (fileLength > startPosition){
 						RandomAccessFile aFile = null;
 						int length = 0;
 						try {
@@ -292,7 +344,9 @@ public class DownloadManager {
 							}
 							
 							ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(neededSize, 4096));
-							aFile = new RandomAccessFile(workWith.file, "r");
+							synchronized (workWith.file) {
+								aFile = new RandomAccessFile(workWith.file, "r");
+							}
 							FileChannel fc = aFile.getChannel();
 							fc.position(startPosition);
 							while ((length = fc.read(buffer)) > 0) {
@@ -305,6 +359,9 @@ public class DownloadManager {
 								clientOutputStream.write(buffer.array(), 0, length);
 								lowerByte += length;
 								buffer.clear();
+								synchronized (workWith) {
+						    		workWith.expirationTime = System.currentTimeMillis() + PART_IDLE_TIME;
+						    	}
 							}
 						} catch (ClientAbortException e){
 							log.error("  Aborted by the client when writing "+length+" bytes. From "+ lowerByte+ " to " + (lowerByte+length-1));
@@ -323,6 +380,27 @@ public class DownloadManager {
 								aFile.close();
 							}
 						}
+					} else {
+						synchronized (workWith) {
+							synchronized (workWith.file) {
+								if (workWith.status == DownloadItemPart.STATUS_FINISHED) {
+									if (workWith.file.length() == 0) {
+										workWith.status = DownloadItemPart.STATUS_INVALID;
+										deleteFile(workWith);
+										downloadItem.parts.remove(workWith);
+									}
+									break;
+								}
+							}
+						}
+					}
+					synchronized (workWith) {
+						firstByte = workWith.firstByte;
+						lastByte = workWith.lastByte;
+						status = workWith.status;
+						synchronized (workWith.file) {
+							fileLength = workWith.file.length();
+						}
 					}
 				}
 				log.info("  Done reading from cached file.");
@@ -330,14 +408,15 @@ public class DownloadManager {
 		}
 	}
 	
-	private static class DownloadItem {
+	public static class DownloadItem {
 //		private boolean completed;
 //		private Date expirationTime;
 		private long realSize;
 		private TreeSet<DownloadItemPart> parts;
+		public TreeSet<DownloadItemPart> getParts() { return parts; }
 	}
 	
-	private static class DownloadItemPart implements Comparable<DownloadItemPart>{
+	public static class DownloadItemPart implements Comparable<DownloadItemPart>{
 		public static final byte STATUS_FINISHED = 0;
 		public static final byte STATUS_STARTED = 1;
 		public static final byte STATUS_CREATED = 2;
@@ -348,8 +427,12 @@ public class DownloadManager {
 		private Long position;
 		private File file;
 		private Thread owner;
+		private String id;
+		private long creationTime;
 		private long expirationTime;
-		
+		public byte getStatus() { return status; }
+		public File getFile() { return file; }
+		public long getExpirationTime() { return expirationTime; }
 		@Override
 		public int compareTo(DownloadItemPart o) {
 			return this.firstByte.compareTo(o.firstByte);

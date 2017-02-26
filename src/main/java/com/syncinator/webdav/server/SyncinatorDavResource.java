@@ -19,11 +19,10 @@ import org.apache.jackrabbit.webdav.DavServletRequest;
 import org.apache.jackrabbit.webdav.DavServletResponse;
 import org.apache.jackrabbit.webdav.DavSession;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
-import org.apache.jackrabbit.webdav.bind.BindConstants;
+import org.apache.jackrabbit.webdav.io.InputContext;
 import org.apache.jackrabbit.webdav.io.OutputContext;
 import org.apache.jackrabbit.webdav.lock.ActiveLock;
 import org.apache.jackrabbit.webdav.lock.DefaultActiveLock;
-import org.apache.jackrabbit.webdav.lock.LockDiscovery;
 import org.apache.jackrabbit.webdav.lock.LockInfo;
 import org.apache.jackrabbit.webdav.lock.LockManager;
 import org.apache.jackrabbit.webdav.lock.Scope;
@@ -105,7 +104,13 @@ public abstract class SyncinatorDavResource implements DavResource {
 	protected abstract void fetchResource() throws Exception;
 	protected abstract void fetchChildren() throws Exception;
 	protected abstract void download(OutputContext context) throws IOException, DavException;
-
+	protected abstract void moveTo(SyncinatorDavResource destination) throws DavException;
+	protected abstract void copyTo(SyncinatorDavResource destination, boolean shallow) throws DavException;
+	protected abstract void delete(SyncinatorDavResource member) throws DavException;
+	protected abstract void createFolder(SyncinatorDavResource resource, InputContext inputContext) throws DavException;
+	protected abstract void createFile(SyncinatorDavResource resource, InputContext inputContext) throws DavException;
+	
+	
 	@Override
 	public DavResourceIterator getMembers() {
 		if (!childrenInitialized) {
@@ -210,6 +215,45 @@ public abstract class SyncinatorDavResource implements DavResource {
 		}
 		
 	}
+	
+
+	@Override
+	public void move(DavResource destination) throws DavException {
+		SyncinatorDavResource d = (SyncinatorDavResource) destination;
+		moveTo(d);
+		resourceCache.remove(destination.getLocator().getResourcePath(), d);
+		resourceCache.remove(getLocator().getResourcePath(), this);
+	}
+	
+	@Override
+	public void copy(DavResource destination, boolean shallow) throws DavException {
+		SyncinatorDavResource d = (SyncinatorDavResource) destination;
+		copyTo(d, shallow);
+		resourceCache.remove(destination.getLocator().getResourcePath(), d);
+	}
+	
+	@Override
+	public void removeMember(DavResource member) throws DavException {
+		SyncinatorDavResource m = (SyncinatorDavResource) member;
+		delete(m);
+		resourceCache.remove(m.getLocator().getResourcePath(), m);
+		resourceCache.remove(getLocator().getResourcePath(), this);
+	}
+	
+	@Override
+	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
+		SyncinatorDavResource r = (SyncinatorDavResource) resource;
+		long size = inputContext.getContentLength();
+		if (size == -1){
+			createFolder(r, inputContext);
+		} else {
+			createFile(r, inputContext);
+		}
+		resourceCache.remove(r.getLocator().getResourcePath(), r);
+		resourceCache.remove(getLocator().getResourcePath(), this);
+		log.info("done");
+	}
+	
 	@Override
 	public String getComplianceClass() {
 		return COMPLIANCE_CLASSES;

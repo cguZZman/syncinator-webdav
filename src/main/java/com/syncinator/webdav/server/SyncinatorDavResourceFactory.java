@@ -34,7 +34,7 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 	@Override
 	public DavResource createResource(DavResourceLocator locator, DavServletRequest request, DavServletResponse response) throws DavException {
 		String method = request.getMethod();
-		if (!method.equals(DavMethods.METHOD_PROPFIND) ){ //&& !request.getMethod().equals(DavMethods.METHOD_GET)){
+//		if (!method.equals(DavMethods.METHOD_PROPFIND) ){ //&& !request.getMethod().equals(DavMethods.METHOD_GET)){
 			log.info("+ " + method+": " + locator.getResourcePath() + (method.equals(DavMethods.METHOD_PROPFIND)? ", deep: " + request.getDepth():""));
 //			for (Enumeration<String> names = request.getHeaderNames(); names.hasMoreElements();){
 //				String name = names.nextElement();
@@ -42,7 +42,7 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 //					log.info("    "+ name + ": " + request.getHeader(name));
 //				}
 //			}
-		}
+//		}
 		
 		String workspace = locator.getWorkspacePath();
 		if (workspace == null) {

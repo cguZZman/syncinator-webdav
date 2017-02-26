@@ -134,27 +134,30 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	}
 	
 	@Override
-	public void move(DavResource destination) throws DavException {
+	public void moveTo(SyncinatorDavResource destination) throws DavException {
 		itemRequest.move(Text.getRelativeParent(destination.getResourcePath(), 1), 
 				Text.getName(destination.getResourcePath()));
 	}
 	
 	@Override
-	public void copy(DavResource destination, boolean shallow) throws DavException {
+	public void copyTo(SyncinatorDavResource destination, boolean shallow) throws DavException {
 		ItemReference parent = new ItemReference();
 		parent.setPath(Text.getRelativeParent(destination.getResourcePath(), 1));
 		log.info("parent: " + parent.getPath());
 		itemRequest.copy(parent, Text.getName(destination.getResourcePath()));
-
 	}
 	
 	@Override
-	public void removeMember(DavResource member) throws DavException {
+	public void delete(SyncinatorDavResource member) throws DavException {
 		((OneDriveDavResource)member).itemRequest.delete();
 	}
-	
 	@Override
-	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
+	public void createFolder(SyncinatorDavResource resource, InputContext inputContext) throws DavException {
+		String fileName = Text.getName(resource.getResourcePath());
+		itemRequest.children().createFolder(fileName);
+	}
+	@Override
+	public void createFile(SyncinatorDavResource resource, InputContext inputContext) throws DavException {
 		long size = inputContext.getContentLength();
 		String fileName = Text.getName(resource.getResourcePath());
 		if (size > SIMPLE_UPLOAD_LIMIT_SIZE){
