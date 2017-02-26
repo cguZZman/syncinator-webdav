@@ -29,7 +29,9 @@ import org.slf4j.LoggerFactory;
 import com.syncinator.webdav.SyncinatorWebdavApplication;
 
 public class DownloadManager {
-	public static final long PART_IDLE_TIME = 10000;
+	public static final long DOWNLOAD_PART_IDLE_TIME = 5000;
+	public static final long MIN_DOWNLOAD_SIZE = 1048576;
+	
 	private static Logger log = LoggerFactory.getLogger(DownloadManager.class);
 	private static final String BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "download_cache";
 	public static Map<String, DownloadItem> itemMap = new HashMap<String, DownloadItem>();
@@ -93,7 +95,7 @@ public class DownloadManager {
 		part.id = id +"."+range[0]+"-"+range[1];
 		part.file = new File(BASE_DIR, part.id);
 		part.creationTime = System.currentTimeMillis();
-		part.expirationTime = part.creationTime + PART_IDLE_TIME;
+		part.expirationTime = part.creationTime + DOWNLOAD_PART_IDLE_TIME;
 		return part;
 	}
 	
@@ -130,28 +132,32 @@ public class DownloadManager {
 				List<DownloadItemPart> expired = new ArrayList<DownloadItemPart>();
 				while (iterator.hasNext()) {
 					DownloadItemPart part = iterator.next();
-					if (part.status == DownloadItemPart.STATUS_INVALID) {
-						continue;
-					}
-					if (part.expirationTime < System.currentTimeMillis() && part.status != DownloadItemPart.STATUS_STARTED){
-						deleteFile(part);
-						expired.add(part);
-						continue;
-					}
-//					log.info("    Testing [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
-					if (lowerByte == part.firstByte){
-						workWith = part;
-						break;
-					} else if (part.firstByte < lowerByte) {
-						if (lowerByte <= part.lastByte) {
-							if (lowerByte < part.position) {
-								workWith = part;
-							}
-							break;
+					synchronized (part) {
+						if (part.status == DownloadItemPart.STATUS_INVALID) {
+							continue;
 						}
-					} else {
-						stopPart = part;
-						break;
+						if (part.status != DownloadItemPart.STATUS_STARTED && part.expirationTime < System.currentTimeMillis()){
+							synchronized (part.file) {
+								deleteFile(part);
+							}
+							expired.add(part);
+							continue;
+						}
+//						log.info("    Testing [" + part.firstByte + " -> " + part.lastByte + " | " + part.position + "]");
+						if (lowerByte == part.firstByte){
+							workWith = part;
+							break;
+						} else if (part.firstByte < lowerByte) {
+							if (lowerByte <= part.lastByte) {
+								if (lowerByte < part.position) {
+									workWith = part;
+								}
+								break;
+							}
+						} else {
+							stopPart = part;
+							break;
+						}						
 					}
 				}
 				if (expired.size() > 0) {
@@ -195,9 +201,10 @@ public class DownloadManager {
 					if (responseCode < 400 && connection.getContentLengthLong() > 0){
 						if (!reponseInitialized) {
 							reponseInitialized = true;
-							downloadItem.realSize = connection.getContentLengthLong();
 							if (partialContent) {
 								downloadItem.realSize = Long.parseLong(connection.getHeaderField("Content-Range").split("/")[1]);
+							} else {
+								downloadItem.realSize = connection.getContentLengthLong();	
 							}
 							requestedRange[1] = Math.min(requestedRange[1], downloadItem.realSize - 1);
 							synchronized (workWith) {
@@ -218,21 +225,19 @@ public class DownloadManager {
 						byte[] buffer = new byte[4096];
 					    long downloaded = 0;
 					    while ((length = is.read(buffer)) > 0 && workWith.position < workWith.lastByte + 1) {
-//					    	if (downloaded == 0) {
-//					    		log.info("  Remote streaming started ["+id+"]...");
-//					    	}
 					    	downloaded += length;
-					    	fos.write(buffer, 0, length);
+					    	synchronized (workWith.file) {
+					    		fos.write(buffer, 0, length);	
+							}
 					    	synchronized (workWith) {
 					    		workWith.position += length;
 					    	}
 					    	if (!abortedByClient) {
 					    		try {
 					    			clientOutputStream.write(buffer, 0, length);
-//					    			clientOutputStream.flush();
 					    		} catch (ClientAbortException e) {
 					    			synchronized (workWith) {
-					    				workWith.lastByte = Math.min(workWith.lastByte, workWith.position+524288*2);
+					    				workWith.lastByte = Math.min(workWith.lastByte, workWith.position+MIN_DOWNLOAD_SIZE);
 					    			}
 					    			log.error("  Aborted by the client. Target position is " + workWith.lastByte);
 					    			abortedByClient = true;
@@ -268,17 +273,23 @@ public class DownloadManager {
 					}
 					abort = true;
 				} finally {
+					if (fos != null) {
+						fos.close();
+					}
+					if (is != null) {
+						is.close();
+					}
 					synchronized (downloadItem.parts) {
 						synchronized (workWith) {
 							workWith.lastByte = workWith.position - 1;
-							workWith.expirationTime = System.currentTimeMillis() + PART_IDLE_TIME;
 							if (workWith.firstByte > workWith.lastByte) {
-								workWith.status = DownloadItemPart.STATUS_INVALID;
 								synchronized (workWith.file) {
 									deleteFile(workWith);
 								}
+								workWith.status = DownloadItemPart.STATUS_INVALID;
 								downloadItem.parts.remove(workWith);
 							} else {
+								workWith.expirationTime = System.currentTimeMillis() + DOWNLOAD_PART_IDLE_TIME;
 								workWith.status = DownloadItemPart.STATUS_FINISHED;
 								lowerByte = workWith.position;
 								synchronized (workWith.file) {
@@ -287,12 +298,6 @@ public class DownloadManager {
 										workWith.file = nFile;
 									}
 								}
-							}
-							if (fos != null) {
-								fos.close();
-							}
-							if (is != null) {
-								is.close();
 							}
 						}
 					}
@@ -360,7 +365,7 @@ public class DownloadManager {
 								lowerByte += length;
 								buffer.clear();
 								synchronized (workWith) {
-						    		workWith.expirationTime = System.currentTimeMillis() + PART_IDLE_TIME;
+						    		workWith.expirationTime = System.currentTimeMillis() + DOWNLOAD_PART_IDLE_TIME;
 						    	}
 							}
 						} catch (ClientAbortException e){
@@ -381,18 +386,18 @@ public class DownloadManager {
 							}
 						}
 					} else {
-						synchronized (workWith) {
-							synchronized (workWith.file) {
-								if (workWith.status == DownloadItemPart.STATUS_FINISHED) {
-									if (workWith.file.length() == 0) {
-										workWith.status = DownloadItemPart.STATUS_INVALID;
-										deleteFile(workWith);
-										downloadItem.parts.remove(workWith);
-									}
+//						synchronized (workWith) {
+//							synchronized (workWith.file) {
+//								if (workWith.status == DownloadItemPart.STATUS_FINISHED) {
+//									if (workWith.file.length() == 0) {
+//										workWith.status = DownloadItemPart.STATUS_INVALID;
+//										deleteFile(workWith);
+//										downloadItem.parts.remove(workWith);
+//									}
 									break;
-								}
-							}
-						}
+//								}
+//							}
+//						}
 					}
 					synchronized (workWith) {
 						firstByte = workWith.firstByte;

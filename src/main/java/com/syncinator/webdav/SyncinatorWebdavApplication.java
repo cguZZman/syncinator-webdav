@@ -3,6 +3,7 @@
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeSet;
 
@@ -55,9 +56,10 @@ public class SyncinatorWebdavApplication {
 	
 	@Scheduled(fixedDelay = 5000)
 	public void downloadPartCleaner(){
-		synchronized (DownloadManager.itemMap) {
+		Map<String, DownloadItem> itemMap = DownloadManager.itemMap;
+		synchronized (itemMap) {
 			List<String> itemsToDelete = new ArrayList<String>();
-			for (Entry<String,DownloadItem> e : DownloadManager.itemMap.entrySet()){
+			for (Entry<String,DownloadItem> e : itemMap.entrySet()){
 				DownloadItem item = e.getValue();
 				synchronized (item) {
 					TreeSet<DownloadItemPart> parts = item.getParts();
@@ -66,7 +68,10 @@ public class SyncinatorWebdavApplication {
 						for (DownloadItemPart part : parts) {
 							synchronized (part) {
 								if (part.getExpirationTime() < System.currentTimeMillis() && part.getStatus() != DownloadItemPart.STATUS_STARTED) {
-									part.getFile().delete();
+									File file = part.getFile();
+									synchronized (file) {
+										file.delete();
+									}
 									partsToDelete.add(part);
 								}
 							}
@@ -79,14 +84,17 @@ public class SyncinatorWebdavApplication {
 				}
 			}
 			for (String key : itemsToDelete) {
-				DownloadManager.itemMap.remove(key);
+				itemMap.remove(key);
 			}
 			List<DownloadItemPart> deleted = new ArrayList<DownloadItemPart>();
 			synchronized (DownloadManager.unableToDelete){
 				for (DownloadItemPart part : DownloadManager.unableToDelete) {
-					log.info("Unable to delete file ["+part.getFile().getName()+"]. Deleted now?: " + part.getFile().delete());
-					if (!part.getFile().exists()) {
-						deleted.add(part);
+					File file = part.getFile();
+					synchronized (file) {
+						log.info("Unable to delete file ["+part.getFile().getName()+"]. Deleted now?: " + part.getFile().delete());
+						if (!part.getFile().exists()) {
+							deleted.add(part);
+						}
 					}
 				}
 				DownloadManager.unableToDelete.removeAll(deleted);
