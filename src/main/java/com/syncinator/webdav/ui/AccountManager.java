@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.Optional;
 
 import com.onedrive.api.OneDrive;
+import com.syncinator.webdav.SyncinatorWebdavApplication;
 import com.syncinator.webdav.cloud.onedrive.IdSerializatorAccessTokenListener;
 import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
 import com.syncinator.webdav.cloud.onedrive.SyncinatorAccessToken;
@@ -35,6 +36,7 @@ import javafx.stage.Stage;
 
 public class AccountManager extends Application {
 
+	public static final String WEBENGINE_BASE_DIR = SyncinatorWebdavApplication.APP_BASE_DIR +  File.separator + "webengine";
 	private TableView<Account> table;
 	
 	@Override

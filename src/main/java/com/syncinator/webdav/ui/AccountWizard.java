@@ -1,9 +1,14 @@
 package com.syncinator.webdav.ui;
 
+
+
+import java.io.File;
+
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.onedrive.api.OneDrive;
+import com.syncinator.webdav.SyncinatorWebdavApplication;
 import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
 import com.syncinator.webdav.model.Provider;
 
@@ -146,6 +151,7 @@ public class AccountWizard extends Stage {
 	private WebView getLoginView(){
 		if (loginView == null){
 			loginView = new WebView();
+			loginView.getEngine().setUserDataDirectory(new File(AccountManager.WEBENGINE_BASE_DIR));
 			loginView.getEngine().locationProperty().addListener((o, old, location) -> {
 				currentLocation = location;
 				System.out.println(location);
