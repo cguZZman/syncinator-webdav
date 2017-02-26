@@ -386,18 +386,7 @@ public class DownloadManager {
 							}
 						}
 					} else {
-//						synchronized (workWith) {
-//							synchronized (workWith.file) {
-//								if (workWith.status == DownloadItemPart.STATUS_FINISHED) {
-//									if (workWith.file.length() == 0) {
-//										workWith.status = DownloadItemPart.STATUS_INVALID;
-//										deleteFile(workWith);
-//										downloadItem.parts.remove(workWith);
-//									}
-									break;
-//								}
-//							}
-//						}
+						break;
 					}
 					synchronized (workWith) {
 						firstByte = workWith.firstByte;
@@ -414,8 +403,6 @@ public class DownloadManager {
 	}
 	
 	public static class DownloadItem {
-//		private boolean completed;
-//		private Date expirationTime;
 		private long realSize;
 		private TreeSet<DownloadItemPart> parts;
 		public TreeSet<DownloadItemPart> getParts() { return parts; }

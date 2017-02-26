@@ -5,11 +5,11 @@
 
 	<groupId>com.syncinator.webdav</groupId>
 	<artifactId>syncinator-webdav</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0.BETA</version>
 	<packaging>jar</packaging>
 
 	<name>syncinator-webdav</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Cloud Drive to WebDAV</description>
 
 	<parent>
 		<groupId>org.springframework.boot</groupId>
@@ -67,4 +67,5 @@
 	</build>
 
 
+	<url>syncinator.org</url>
 </project>
