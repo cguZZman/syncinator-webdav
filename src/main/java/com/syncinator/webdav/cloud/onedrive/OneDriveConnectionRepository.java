@@ -30,6 +30,7 @@ public class OneDriveConnectionRepository {
 		SyncinatorAccessToken accessToken = (SyncinatorAccessToken) oneDrive.getAccessTokenListener().onAccessTokenRequired(oneDrive);
 		accessToken.setDriveId(drive.getId());
 		accessToken.setOwner(drive.getOwner().getUser().getDisplayName());
+		oneDrive.setExistingToken(accessToken);
 		idTokenListener.onAccessTokenReceived(oneDrive, accessToken);
 		oneDrive.setAccessTokenListener(idTokenListener);
 		addConnection(id, oneDrive);

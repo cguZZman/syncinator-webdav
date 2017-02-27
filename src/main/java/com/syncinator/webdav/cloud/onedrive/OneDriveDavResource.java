@@ -106,11 +106,6 @@ public class OneDriveDavResource extends SyncinatorDavResource {
 	
 	@Override
 	public void download(OutputContext context) throws IOException, DavException {
-//		Map<String,String> headerMap = new HashMap<String,String>();
-//		for (Enumeration<String> e = request.getHeaderNames(); e.hasMoreElements();){
-//			String header = e.nextElement();
-//			headerMap.put(header.toLowerCase(), request.getHeader(header));
-//		}
 		log.info("File ["+getDisplayName()+"] requested...");
 		DownloadManager.download(this, item.getDownloadUrl());
 	}

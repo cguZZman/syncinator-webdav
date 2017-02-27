@@ -251,7 +251,6 @@ public abstract class SyncinatorDavResource implements DavResource {
 		}
 		resourceCache.remove(r.getLocator().getResourcePath(), r);
 		resourceCache.remove(getLocator().getResourcePath(), this);
-		log.info("done");
 	}
 	
 	@Override
