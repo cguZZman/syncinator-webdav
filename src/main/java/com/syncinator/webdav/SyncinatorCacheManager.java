@@ -1,5 +1,7 @@
 package com.syncinator.webdav;
 
+import java.net.CookieHandler;
+import java.net.CookieManager;
 import java.util.concurrent.TimeUnit;
 
 import org.ehcache.Cache;
@@ -14,7 +16,7 @@ import com.syncinator.webdav.server.SyncinatorDavResource;
 
 public class SyncinatorCacheManager {
 	
-	private static String RESOURCE_ALIAS = "resource";
+	private static final String RESOURCE_ALIAS = "resource";
 	
 	private static CacheManager cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
 			.withCache(RESOURCE_ALIAS, 

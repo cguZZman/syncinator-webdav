@@ -8,7 +8,7 @@ import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.onedrive.api.OneDrive;
-import com.syncinator.webdav.SyncinatorWebdavApplication;
+import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
 import com.syncinator.webdav.model.Provider;
 
@@ -165,8 +165,6 @@ public class AccountWizard extends Stage {
 	
 	private void loadLogin(){
 		if (selectedProvider.equals(Provider.ONEDRIVE)) {
-			//clean the cookie manager here
-			//getLoginView().co
 			getLoginView().getEngine().load("https://login.live.com/oauth20_authorize.srf?client_id=0000000048145120&scope=wl.offline_access+wl.skydrive&response_type=code&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf&display=touch&state=1111");
 		} else {
 			Alert alert = new Alert(AlertType.INFORMATION);

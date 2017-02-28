@@ -4,6 +4,8 @@ import java.io.File;
 import java.util.Optional;
 
 import com.onedrive.api.OneDrive;
+import com.syncinator.webdav.SyncinatorCacheManager;
+import com.syncinator.webdav.SyncinatorCookieManager;
 import com.syncinator.webdav.SyncinatorWebdavApplication;
 import com.syncinator.webdav.cloud.onedrive.IdSerializatorAccessTokenListener;
 import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
@@ -75,6 +77,7 @@ public class AccountManager extends Application {
 		addButton.setAlignment(Pos.CENTER_LEFT);
 		addButton.prefWidthProperty().bind(optionBox.prefWidthProperty());
 		addButton.setOnAction(e -> {
+			SyncinatorCookieManager.getCookieManager().getCookieStore().removeAll();
 			AccountWizard wizard = new AccountWizard();
 			wizard.initOwner(primaryStage);
 			wizard.setOnAccountAdded(ev -> {

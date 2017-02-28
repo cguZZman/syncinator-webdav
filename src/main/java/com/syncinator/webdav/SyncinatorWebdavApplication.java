@@ -100,6 +100,5 @@ public class SyncinatorWebdavApplication {
 				DownloadManager.unableToDelete.removeAll(deleted);
 			}
 		}
-		
 	}
 }
