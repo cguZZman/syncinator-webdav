@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.Optional;
 
 import com.onedrive.api.OneDrive;
-import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.SyncinatorCookieManager;
 import com.syncinator.webdav.SyncinatorWebdavApplication;
 import com.syncinator.webdav.cloud.onedrive.IdSerializatorAccessTokenListener;
