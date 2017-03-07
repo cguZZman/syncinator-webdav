@@ -58,7 +58,7 @@ public class AccountManager extends Application {
 		name.setCellValueFactory(new PropertyValueFactory<>("provider"));
 		name.setCellFactory((TableColumn<Account, Provider> param) -> { return new ProviderCell(); });
 		TableColumn<Account, String> owner = new TableColumn<Account, String>("Owner");
-		owner.prefWidthProperty().bind(table.widthProperty().multiply(0.4));
+		owner.prefWidthProperty().bind(table.widthProperty().multiply(0.39));
 		owner.setCellValueFactory(new PropertyValueFactory<>("owner"));
 		TableColumn<Account, String> driveId = new TableColumn<Account, String>("Drive Id");
 		driveId.prefWidthProperty().bind(table.widthProperty().multiply(0.3));
