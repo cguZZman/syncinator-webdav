@@ -106,6 +106,7 @@ public class AccountManager extends Application {
 				Account account = table.getSelectionModel().getSelectedItem();
 				table.getItems().remove(account);
 				removeAccount(account);
+				table.refresh();
 			}
 		});
 		optionBox.getChildren().add(removeButton);
@@ -158,7 +159,8 @@ public class AccountManager extends Application {
 		if (provider.equals(Provider.ONEDRIVE)){
 			OneDrive onedrive = OneDriveConnectionRepository.getConnection(driveId);
 			SyncinatorAccessToken accessToken = (SyncinatorAccessToken) onedrive.getAccessTokenListener().onAccessTokenRequired(onedrive);
-			table.getItems().add(new Account(provider, accessToken.getOwner(), driveId));	
+			table.getItems().add(new Account(provider, accessToken.getOwner(), driveId));
+			table.refresh();
 		}
 	}
 	
