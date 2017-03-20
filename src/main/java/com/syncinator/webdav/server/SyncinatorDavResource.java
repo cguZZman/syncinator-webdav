@@ -10,6 +10,7 @@ import org.apache.jackrabbit.server.io.IOUtil;
 import org.apache.jackrabbit.util.Text;
 import org.apache.jackrabbit.webdav.DavCompliance;
 import org.apache.jackrabbit.webdav.DavException;
+import org.apache.jackrabbit.webdav.DavMethods;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
 import org.apache.jackrabbit.webdav.DavResourceIterator;
@@ -243,8 +244,7 @@ public abstract class SyncinatorDavResource implements DavResource {
 	@Override
 	public void addMember(DavResource resource, InputContext inputContext) throws DavException {
 		SyncinatorDavResource r = (SyncinatorDavResource) resource;
-		long size = inputContext.getContentLength();
-		if (size == -1){
+		if (request.getMethod().equals(DavMethods.METHOD_MKCOL)){
 			createFolder(r, inputContext);
 		} else {
 			createFile(r, inputContext);
