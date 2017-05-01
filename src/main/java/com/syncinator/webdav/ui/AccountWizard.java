@@ -8,15 +8,16 @@ import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.onedrive.api.OneDrive;
-import com.syncinator.webdav.SyncinatorCacheManager;
 import com.syncinator.webdav.cloud.onedrive.OneDriveConnectionRepository;
 import com.syncinator.webdav.model.Provider;
 
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ObjectPropertyBase;
+import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Worker.State;
 import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.event.EventType;
@@ -29,12 +30,14 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -44,7 +47,9 @@ public class AccountWizard extends Stage {
 	private String step = "select-provider";
 	private Label title;
 	private ListView<Provider> providerView;
+	private StackPane centerPane;
 	private WebView loginView;
+	private ProgressBar progressBar; 
 	private Button nextButton;
 	private Button backButton;
 	private String currentLocation;
@@ -104,7 +109,7 @@ public class AccountWizard extends Stage {
 				step = "privider-login";
 				backButton.setDisable(false);
 				nextButton.setDisable(true);
-				layout.setCenter(getLoginView());
+				layout.setCenter(getCenterPane());
 				loadLogin();
 				title.setText("Login into the account:");
 			}
@@ -159,13 +164,51 @@ public class AccountWizard extends Stage {
 					nextStep();
 				}
 			});
+			loginView.getEngine().getLoadWorker().stateProperty().addListener(new ChangeListener<State>() {
+				@Override
+				public void changed(ObservableValue ov, State oldState, State newState) {
+					getProgressBar().setVisible(newState != State.SUCCEEDED && newState != State.FAILED);
+				}
+			});
+			
+			loginView.getEngine().getLoadWorker().exceptionProperty().addListener((o‌​bs, oldExc, newExc) -> {
+				if (newExc != null) {
+					newExc.printStackTrace();
+					Alert alert = new Alert(AlertType.ERROR);
+					alert.setTitle("Syncinator");
+					alert.setHeaderText(null);
+					alert.setContentText("Error loading sign-in page: " + newExc.getMessage());
+					alert.initOwner(getOwner());
+					alert.showAndWait();
+				}
+			});
 		}
 		return loginView;
 	}
 	
+	private StackPane getCenterPane(){
+		if (centerPane == null){
+			centerPane = new StackPane();
+			centerPane.getChildren().addAll(getLoginView(), getProgressBar());
+			
+		}
+		return centerPane;
+	}
+	
+	private ProgressBar getProgressBar(){
+		if (progressBar == null){
+			progressBar = new ProgressBar();
+			progressBar.progressProperty().bind(getLoginView().getEngine().getLoadWorker().progressProperty());
+			progressBar.setVisible(false);
+			//progressBar.setProgress(0.2);
+			
+		}
+		return progressBar;
+	}
+	
 	private void loadLogin(){
 		if (selectedProvider.equals(Provider.ONEDRIVE)) {
-			getLoginView().getEngine().load("https://login.live.com/oauth20_authorize.srf?client_id=0000000048145120&scope=offline_access+onedrive.readwrite&response_type=code&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf&display=touch&state=1111");
+			getLoginView().getEngine().load("https://login.live.com/oauth20_authorize.srf?client_id=0000000048145120&scope=offline_access+onedrive.readwrite&response_type=code&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf");
 		} else {
 			Alert alert = new Alert(AlertType.INFORMATION);
 			alert.setTitle("Syncinator");
