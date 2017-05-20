@@ -38,12 +38,12 @@ public class SyncinatorDavResourceFactory implements DavResourceFactory {
 		String method = request.getMethod();
 //		if (!method.equals(DavMethods.METHOD_PROPFIND) ){ //&& !request.getMethod().equals(DavMethods.METHOD_GET)){
 			log.info("+ " + method+": " + locator.getResourcePath() + (method.equals(DavMethods.METHOD_PROPFIND)? ", deep: " + request.getDepth():""));
-			for (Enumeration<String> names = request.getHeaderNames(); names.hasMoreElements();){
-				String name = names.nextElement();
+//			for (Enumeration<String> names = request.getHeaderNames(); names.hasMoreElements();){
+//				String name = names.nextElement();
 //				if (name.equals("Range")) {
-					log.info("    "+ name + ": " + request.getHeader(name));
+//					log.info("    "+ name + ": " + request.getHeader(name));
 //				}
-			}
+//			}
 //		}
 		
 		String workspace = locator.getWorkspacePath();
