@@ -9,3 +9,8 @@
 .list-cell:empty {
     -fx-background-color: white;
 }
+
+.progress-bar > .bar {
+    -fx-background-insets: 1 1 2 1;
+    -fx-padding: 0.20em;
+}

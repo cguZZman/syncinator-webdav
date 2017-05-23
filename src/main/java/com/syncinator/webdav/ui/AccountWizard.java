@@ -37,7 +37,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -47,7 +47,7 @@ public class AccountWizard extends Stage {
 	private String step = "select-provider";
 	private Label title;
 	private ListView<Provider> providerView;
-	private StackPane centerPane;
+	private VBox centerPane;
 	private WebView loginView;
 	private ProgressBar progressBar; 
 	private Button nextButton;
@@ -186,10 +186,10 @@ public class AccountWizard extends Stage {
 		return loginView;
 	}
 	
-	private StackPane getCenterPane(){
+	private VBox getCenterPane(){
 		if (centerPane == null){
-			centerPane = new StackPane();
-			centerPane.getChildren().addAll(getLoginView(), getProgressBar());
+			centerPane = new VBox();
+			centerPane.getChildren().addAll(getProgressBar(), getLoginView());
 			
 		}
 		return centerPane;
@@ -200,8 +200,7 @@ public class AccountWizard extends Stage {
 			progressBar = new ProgressBar();
 			progressBar.progressProperty().bind(getLoginView().getEngine().getLoadWorker().progressProperty());
 			progressBar.setVisible(false);
-			//progressBar.setProgress(0.2);
-			
+			progressBar.prefWidthProperty().bind(getLoginView().prefWidthProperty());
 		}
 		return progressBar;
 	}
