@@ -1,7 +1,5 @@
 package com.syncinator.webdav;
 
-import java.net.CookieHandler;
-import java.net.CookieManager;
 import java.util.concurrent.TimeUnit;
 
 import org.ehcache.Cache;

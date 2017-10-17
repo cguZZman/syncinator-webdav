@@ -1,7 +1,5 @@
 package com.syncinator.webdav.server;
 
-import java.util.Enumeration;
-
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.jackrabbit.webdav.DavException;
